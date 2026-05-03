@@ -102,11 +102,38 @@ const THINK_COLORS: Record<string, string> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// live state (updated by thinking_level_select events)
+// usage helpers (for fusing live streaming data with persisted entries)
+// ═══════════════════════════════════════════════════════════════════════════
+
+type SessionAssistantUsage = AssistantMessage['usage'];
+
+function getUsageTokenTotal(usage: SessionAssistantUsage): number {
+  return (
+    ('totalTokens' in usage && typeof usage.totalTokens === 'number' ? usage.totalTokens : 0) ||
+    usage.input + usage.output + usage.cacheRead + usage.cacheWrite
+  );
+}
+
+function isSessionAssistantMessage(value: unknown): value is AssistantMessage {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'role' in value &&
+    (value as any).role === 'assistant' &&
+    'usage' in value &&
+    typeof (value as any).usage?.input === 'number' &&
+    typeof (value as any).usage?.output === 'number'
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// live state (updated by events)
 // ═══════════════════════════════════════════════════════════════════════════
 
 let liveThinkLevel = 'off';
 let liveTui: any = null;
+let isStreaming = false;
+let liveAssistantUsage: SessionAssistantUsage | null = null;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // footer renderer
@@ -132,29 +159,48 @@ function createFooterRenderer(ctx: ExtensionContext) {
       },
       invalidate() {},
       render(width: number): string[] {
-        // ── cumulative token stats from ALL session entries ──
+        // ── cumulative token stats from persisted entries + live streaming ──
         let totalInput = 0,
           totalOutput = 0,
           totalCacheRead = 0,
           totalCacheWrite = 0,
           totalCost = 0;
+        let lastPersistedAssistant: AssistantMessage | undefined;
         for (const e of ctx.sessionManager.getEntries()) {
           if (e.type === 'message' && e.message.role === 'assistant') {
             const m = e.message as AssistantMessage;
+            if (m.stopReason === 'error' || m.stopReason === 'aborted') continue;
             totalInput += m.usage.input;
             totalOutput += m.usage.output;
             totalCacheRead += m.usage.cacheRead;
             totalCacheWrite += m.usage.cacheWrite;
             totalCost += m.usage.cost.total;
+            if (getUsageTokenTotal(m.usage) > 0) {
+              lastPersistedAssistant = m;
+            }
           }
         }
 
+        // fuse live streaming usage (not yet persisted) on top of persisted totals
+        const latestUsage = isStreaming
+          ? (liveAssistantUsage ?? lastPersistedAssistant?.usage)
+          : lastPersistedAssistant?.usage;
+        if (isStreaming && liveAssistantUsage) {
+          totalInput += liveAssistantUsage.input;
+          totalOutput += liveAssistantUsage.output;
+          totalCacheRead += liveAssistantUsage.cacheRead;
+          totalCacheWrite += liveAssistantUsage.cacheWrite;
+          totalCost += liveAssistantUsage.cost.total;
+        }
+
         // ── context usage ──
-        const contextUsage = ctx.getContextUsage();
-        const contextWindow = contextUsage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
-        const contextPercentValue = contextUsage?.percent ?? 0;
+        // During streaming, ctx.getContextUsage() may be stale; estimate from usage.
+        const coreContextUsage = isStreaming && liveAssistantUsage ? null : ctx.getContextUsage();
+        const contextTokens =
+          coreContextUsage?.tokens ?? (latestUsage ? getUsageTokenTotal(latestUsage) : null);
+        const contextWindow = coreContextUsage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
         const contextPercent =
-          contextUsage?.percent !== null ? contextPercentValue.toFixed(1) : '?';
+          contextTokens !== null ? ((contextTokens / contextWindow) * 100).toFixed(1) : '?';
 
         // ── stats + model ──
         const statsParts: string[] = [];
@@ -170,14 +216,16 @@ function createFooterRenderer(ctx: ExtensionContext) {
         }
 
         // context % with threshold coloring
+        const contextPercentNum =
+          contextTokens !== null && contextWindow > 0 ? (contextTokens / contextWindow) * 100 : 0;
         const contextPercentDisplay =
           contextPercent === '?'
             ? `?/${formatTokens(contextWindow)}`
             : `${contextPercent}%/${formatTokens(contextWindow)}`;
         let contextPercentStr: string;
-        if (contextPercentValue > 90) {
+        if (contextPercentNum > 90) {
           contextPercentStr = theme.fg('error', contextPercentDisplay);
-        } else if (contextPercentValue > 70) {
+        } else if (contextPercentNum > 70) {
           contextPercentStr = theme.fg('warning', contextPercentDisplay);
         } else {
           contextPercentStr = contextPercentDisplay;
@@ -290,6 +338,33 @@ export function registerFooter(pi: ExtensionAPI) {
   pi.on('model_select', () => {
     if (!enabled) return;
     liveThinkLevel = pi.getThinkingLevel();
+    liveTui?.requestRender();
+  });
+
+  // ── real-time token updates during streaming ──
+
+  pi.on('agent_start', () => {
+    isStreaming = true;
+    liveAssistantUsage = null;
+  });
+
+  pi.on('message_update', (event) => {
+    if (!enabled) return;
+    if (isSessionAssistantMessage(event.message)) {
+      liveAssistantUsage = event.message.usage;
+      liveTui?.requestRender();
+    }
+  });
+
+  pi.on('message_end', (event) => {
+    isStreaming = false;
+    if (!enabled) return;
+    if (isSessionAssistantMessage(event.message)) {
+      liveAssistantUsage =
+        event.message.stopReason === 'error' || event.message.stopReason === 'aborted'
+          ? null
+          : event.message.usage;
+    }
     liveTui?.requestRender();
   });
 
