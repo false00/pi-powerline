@@ -71,6 +71,20 @@ function formatTokens(count: number): string {
 // think level display (mirrors widget.ts style)
 // ═══════════════════════════════════════════════════════════════════════════
 
+function hasNerdFonts(): boolean {
+  if (process.env.POWERLINE_NERD_FONTS === '1') return true;
+  if (process.env.POWERLINE_NERD_FONTS === '0') return false;
+  if (process.env.GHOSTTY_RESOURCES_DIR) return true;
+  const term = (process.env.TERM_PROGRAM || '').toLowerCase();
+  return ['iterm', 'wezterm', 'kitty', 'ghostty', 'alacritty'].some((t) => term.includes(t));
+}
+
+const ICON_THINK = hasNerdFonts() ? '' : '';
+
+function withIcon(icon: string, text: string): string {
+  return icon ? `${icon} ${text}` : text;
+}
+
 const THINK_LABELS: Record<string, string> = {
   minimal: 'min',
   low: 'low',
@@ -185,15 +199,15 @@ function createFooterRenderer(ctx: ExtensionContext) {
         if (ctx.model?.reasoning) {
           const tl = liveThinkLevel || 'off';
           const label = THINK_LABELS[tl] ?? tl;
-          rightSidePlain = `think:${label}`;
+          rightSidePlain = withIcon(ICON_THINK, `think:${label}`);
         }
 
         const minPad = 2;
         let paddingLen: number;
         let rightFinal: string;
 
-        if (statsLeftWidth + minPad + rightSidePlain.length <= width) {
-          paddingLen = width - statsLeftWidth - rightSidePlain.length;
+        if (statsLeftWidth + minPad + visibleWidth(rightSidePlain) <= width) {
+          paddingLen = width - statsLeftWidth - visibleWidth(rightSidePlain);
           rightFinal = rightSidePlain;
         } else {
           const avail = width - statsLeftWidth - minPad;
