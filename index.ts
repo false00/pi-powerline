@@ -3,19 +3,22 @@ import type { AutocompleteItem } from '@mariozechner/pi-tui';
 import { registerEditor } from './editor.ts';
 import { registerFooter } from './footer.ts';
 import { registerHeader } from './header.ts';
+import { registerWidget } from './widget.ts';
 
 export default function (pi: ExtensionAPI) {
   const editor = registerEditor(pi);
   const footer = registerFooter(pi);
   const header = registerHeader(pi);
+  const widget = registerWidget(pi);
 
   pi.registerCommand('powerline', {
-    description: 'Toggle powerline modules: editor, footer, header',
+    description: 'Toggle powerline modules: editor, footer, header, widget',
     getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
       const items: AutocompleteItem[] = [
         { value: 'editor', label: 'editor', description: 'Toggle custom input editor' },
         { value: 'footer', label: 'footer', description: 'Toggle custom footer' },
         { value: 'header', label: 'header', description: 'Toggle custom header' },
+        { value: 'widget', label: 'widget', description: 'Toggle editor status widget' },
       ];
       if (!prefix) return items;
       return items.filter((i) => i.value.startsWith(prefix));
@@ -33,8 +36,11 @@ export default function (pi: ExtensionAPI) {
         case 'header':
           msg = header.toggle(ctx);
           break;
+        case 'widget':
+          msg = widget.toggle(ctx);
+          break;
         default:
-          ctx.ui.notify(`Usage: /powerline <editor|footer|header>`, 'warning');
+          ctx.ui.notify(`Usage: /powerline <editor|footer|header|widget>`, 'warning');
           return;
       }
       ctx.ui.notify(msg, 'info');
