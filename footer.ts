@@ -68,6 +68,26 @@ function formatTokens(count: number): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// think level display (mirrors widget.ts style)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const THINK_LABELS: Record<string, string> = {
+  minimal: 'min',
+  low: 'low',
+  medium: 'med',
+  high: 'high',
+  xhigh: 'xhi',
+};
+
+const THINK_COLORS: Record<string, string> = {
+  high: 'thinkingHigh',
+  xhigh: 'thinkingXhigh',
+  minimal: 'thinkingMinimal',
+  low: 'thinkingLow',
+  medium: 'thinkingMedium',
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // live state (updated by thinking_level_select events)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -157,48 +177,45 @@ function createFooterRenderer(ctx: ExtensionContext) {
           statsLeftWidth = visibleWidth(statsLeft);
         }
 
-        // right side: model + thinking level + optional provider prefix
-        const modelName = ctx.model?.id || 'no-model';
-        let rightSide = modelName;
+        // ── stats line layout: left (dim) + padding (dim) + right (colored think level) ──
+        const dimLeft = theme.fg('dim', statsLeft);
+
+        // right side: think level only, colored (omitted when model lacks reasoning)
+        let rightSidePlain = '';
         if (ctx.model?.reasoning) {
           const tl = liveThinkLevel || 'off';
-          rightSide = tl === 'off' ? `${modelName} • thinking off` : `${modelName} • ${tl}`;
+          const label = THINK_LABELS[tl] ?? tl;
+          rightSidePlain = `think:${label}`;
         }
 
-        // prepend provider when multiple are available
-        if (footerData.getAvailableProviderCount() > 1 && ctx.model) {
-          const withProvider = `(${ctx.model.provider}) ${rightSide}`;
-          if (statsLeftWidth + 2 + visibleWidth(withProvider) <= width) {
-            rightSide = withProvider;
-          }
-        }
-
-        const rightW = visibleWidth(rightSide);
         const minPad = 2;
-        let statsLine: string;
+        let paddingLen: number;
+        let rightFinal: string;
 
-        if (statsLeftWidth + minPad + rightW <= width) {
-          const padding = ' '.repeat(width - statsLeftWidth - rightW);
-          statsLine = statsLeft + padding + rightSide;
+        if (statsLeftWidth + minPad + rightSidePlain.length <= width) {
+          paddingLen = width - statsLeftWidth - rightSidePlain.length;
+          rightFinal = rightSidePlain;
         } else {
           const avail = width - statsLeftWidth - minPad;
           if (avail > 0) {
-            const truncatedRight = truncateToWidth(rightSide, avail, '');
-            const padding = ' '.repeat(
-              Math.max(0, width - statsLeftWidth - visibleWidth(truncatedRight)),
-            );
-            statsLine = statsLeft + padding + truncatedRight;
+            rightFinal = truncateToWidth(rightSidePlain, avail, '');
+            paddingLen = width - statsLeftWidth - visibleWidth(rightFinal);
           } else {
-            statsLine = statsLeft;
+            rightFinal = '';
+            paddingLen = width - statsLeftWidth;
           }
         }
 
-        // dim-wrap left/right separately so context % coloring isn't cleared
-        const dimLeft = theme.fg('dim', statsLeft);
-        const tail = statsLine.slice(statsLeft.length);
-        const dimTail = theme.fg('dim', tail);
+        const dimPadding = paddingLen > 0 ? theme.fg('dim', ' '.repeat(paddingLen)) : '';
+        let coloredRight = '';
+        if (rightFinal) {
+          const tl = liveThinkLevel || 'off';
+          coloredRight = theme.fg(THINK_COLORS[tl] ?? 'thinkingOff', rightFinal);
+        }
 
-        const lines = [dimLeft + dimTail];
+        const statsLine = dimLeft + dimPadding + coloredRight;
+
+        const lines = [statsLine];
 
         // ── line 3: extension statuses ──
         const extensionStatuses = footerData.getExtensionStatuses() as Map<string, string>;
