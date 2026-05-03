@@ -44,9 +44,9 @@ All three extensions activate automatically on session start. Each can be toggle
 
 | Extension | Flag (settings.json) | Command |
 |-----------|---------------------|---------|
-| Editor    | `customEditor` (default: `true`) | — |
-| Footer    | `customFooter` (default: `true`) | `/footer` toggle |
-| Header    | `customHeader` (default: `true`) | `/builtin-header` restore default |
+| Editor    | `customEditor` (default: `true`) | `/powerline editor` |
+| Footer    | `customFooter` (default: `true`) | `/powerline footer` |
+| Header    | `customHeader` (default: `true`) | `/powerline header` |
 
 ### Settings
 
@@ -64,8 +64,9 @@ Disable individual extensions in `.pi/settings.json`:
 
 | Command | Description |
 |---------|-------------|
-| `/footer` | Toggle custom footer on/off |
-| `/builtin-header` | Restore the built-in header |
+| `/powerline editor` | Toggle custom editor on/off |
+| `/powerline footer` | Toggle custom footer on/off |
+| `/powerline header` | Toggle custom header on/off |
 
 ## Development
 
@@ -112,7 +113,7 @@ export default function (pi: ExtensionAPI) {
 }
 ```
 
-Each module (`editor.ts`, `footer.ts`, `header.ts`) exports a `registerXxx(pi: ExtensionAPI)` function that subscribes to pi lifecycle events and registers flags/commands.
+Each module (`editor.ts`, `footer.ts`, `header.ts`) exports a `registerXxx(pi: ExtensionAPI)` function that subscribes to pi lifecycle events and registers flags. The unified `/powerline <module>` command toggles individual modules and persists changes to `.pi/settings.json`.
 
 ### Code quality
 

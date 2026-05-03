@@ -1,19 +1,54 @@
 /**
- * Custom Footer Extension - demonstrates ctx.ui.setFooter()
+ * Custom Footer Extension
  *
- * footerData exposes data not otherwise accessible:
- * - getGitBranch(): current git branch
- * - getExtensionStatuses(): texts from ctx.ui.setStatus()
+ * Token stats come from ctx.sessionManager/ctx.model.
+ * Git branch comes from footerData (not otherwise accessible).
  *
- * Token stats come from ctx.sessionManager/ctx.model (already accessible).
- *
- * Controlled by settings.json → customFooter (boolean, default true).
+ * Controlled by .pi/settings.json → customFooter (boolean, default true).
  * Toggle at runtime with /footer command.
  */
 
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import type { AssistantMessage } from '@mariozechner/pi-ai';
 import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
 import { truncateToWidth, visibleWidth } from '@mariozechner/pi-tui';
+/** Update a flag value in `cwd/.pi/settings.json` for persistence across restarts. */
+function updateSettingsFlag(cwd: string, flagName: string, value: boolean): void {
+  const settingsDir = join(cwd, '.pi');
+  const settingsPath = join(settingsDir, 'settings.json');
+
+  let settings: Record<string, unknown> = {};
+  if (existsSync(settingsPath)) {
+    try {
+      const content = readFileSync(settingsPath, 'utf-8');
+      settings = JSON.parse(content || '{}');
+    } catch {
+      settings = {};
+    }
+  } else if (!existsSync(settingsDir)) {
+    mkdirSync(settingsDir, { recursive: true });
+  }
+
+  settings[flagName] = value;
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+}
+
+/** Read a flag value from `cwd/.pi/settings.json`, falling back to `fallback`. */
+function getSettingsFlag(cwd: string, flagName: string, fallback: boolean): boolean {
+  const settingsPath = join(cwd, '.pi', 'settings.json');
+  if (existsSync(settingsPath)) {
+    try {
+      const content = readFileSync(settingsPath, 'utf-8');
+      const settings = JSON.parse(content || '{}');
+      if (flagName in settings) return !!settings[flagName];
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return fallback;
+}
+
 /** Format a token count for display: <1000 shown as-is, >=1000 shown as e.g. "1.5k". */
 function formatTokenCount(n: number): string {
   return n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`;
@@ -57,6 +92,7 @@ function createFooterRenderer(ctx: ExtensionContext) {
   };
 }
 
+/** Register the custom footer extension: flag and auto-enable on session start. */
 export function registerFooter(pi: ExtensionAPI) {
   pi.registerFlag('customFooter', {
     description: 'Enable custom footer with token stats',
@@ -69,31 +105,36 @@ export function registerFooter(pi: ExtensionAPI) {
   function enable(ctx: ExtensionContext) {
     enabled = true;
     ctx.ui.setFooter(createFooterRenderer(ctx));
-    ctx.ui.notify('Custom footer enabled', 'info');
   }
 
   function disable(ctx: ExtensionContext) {
     enabled = false;
     ctx.ui.setFooter(undefined);
-    ctx.ui.notify('Default footer restored', 'info');
   }
 
-  // Auto-enable on session start if flag is set
+  // auto-enable on session start if flag is set
   pi.on('session_start', (_event, ctx) => {
-    if (pi.getFlag('customFooter')) {
+    if (getSettingsFlag(ctx.cwd, 'customFooter', true)) {
       enable(ctx);
     }
   });
 
-  // Manual toggle command
-  pi.registerCommand('footer', {
-    description: 'Toggle custom footer',
-    handler: async (_args, ctx) => {
+  /** Toggle the custom footer on/off and persist to settings.json. */
+  return {
+    toggle(ctx: ExtensionContext): string {
       if (enabled) {
         disable(ctx);
+        updateSettingsFlag(ctx.cwd, 'customFooter', false);
+        return 'Footer disabled';
       } else {
         enable(ctx);
+        updateSettingsFlag(ctx.cwd, 'customFooter', true);
+        return 'Footer enabled';
       }
     },
-  });
+    /** Whether the footer is currently enabled. */
+    get enabled(): boolean {
+      return enabled;
+    },
+  };
 }
