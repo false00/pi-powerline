@@ -94,4 +94,15 @@ export function registerHeader(pi: ExtensionAPI) {
       disable(ctx);
     }
   });
+
+  // re-evaluate on /powerline command (settings changed)
+  pi.events.on('powerline_settings_changed', (ctx) => {
+    const c = ctx as ExtensionContext;
+    const show = readPowerlineSettings(c.cwd).header;
+    if (show && !headerEnabled) {
+      enable(c);
+    } else if (!show && headerEnabled) {
+      disable(c);
+    }
+  });
 }

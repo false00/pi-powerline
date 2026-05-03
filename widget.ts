@@ -85,4 +85,15 @@ export function registerWidget(pi: ExtensionAPI) {
       liveTui?.requestRender();
     }
   });
+
+  // re-evaluate on /powerline command (settings changed)
+  pi.events.on('powerline_settings_changed', (ctx) => {
+    const c = ctx as ExtensionContext;
+    const { breadcrumb } = readPowerlineSettings(c.cwd);
+    if (breadcrumb === 'top' && !widgetEnabled) {
+      enable(c);
+    } else if (breadcrumb !== 'top' && widgetEnabled) {
+      disable(c);
+    }
+  });
 }

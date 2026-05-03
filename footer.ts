@@ -366,6 +366,17 @@ export function registerFooter(pi: ExtensionAPI) {
     }
   });
 
+  // re-evaluate on /powerline command (settings changed)
+  pi.events.on('powerline_settings_changed', (ctx) => {
+    const c = ctx as ExtensionContext;
+    const show = readPowerlineSettings(c.cwd).footer;
+    if (show && !enabled) {
+      enable(c);
+    } else if (!show && enabled) {
+      disable(c);
+    }
+  });
+
   // ── real-time token updates during streaming ──
 
   pi.on('agent_start', () => {

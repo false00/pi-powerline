@@ -112,6 +112,7 @@ export default function (pi: ExtensionAPI) {
             return;
           }
           writePowerlineSetting(ctx.cwd, 'breadcrumb', val);
+          pi.events.emit('powerline_settings_changed', ctx);
           msg = `breadcrumb → ${val}`;
           break;
         }
@@ -121,6 +122,7 @@ export default function (pi: ExtensionAPI) {
             return;
           }
           writePowerlineSetting(ctx.cwd, 'footer', val === 'on');
+          pi.events.emit('powerline_settings_changed', ctx);
           msg = `footer → ${val}`;
           break;
         }
@@ -130,6 +132,7 @@ export default function (pi: ExtensionAPI) {
             return;
           }
           writePowerlineSetting(ctx.cwd, 'header', val === 'on');
+          pi.events.emit('powerline_settings_changed', ctx);
           msg = `header → ${val}`;
           break;
         }

@@ -174,4 +174,12 @@ export function registerEditor(pi: ExtensionAPI) {
     breadcrumbMode = readPowerlineSettings(ctx.cwd).breadcrumb;
     liveEditorTui?.requestRender();
   });
+
+  // re-render on /powerline command (settings changed)
+  pi.events.on('powerline_settings_changed', (ctx) => {
+    const c = ctx as ExtensionContext;
+    breadcrumbMode = readPowerlineSettings(c.cwd).breadcrumb;
+    liveCtx = c;
+    liveEditorTui?.requestRender();
+  });
 }
