@@ -225,6 +225,8 @@ function createFooterRenderer(ctx: ExtensionContext) {
           contextTokens !== null ? ((contextTokens / contextWindow) * 100).toFixed(1) : '?';
 
         // ── stats + model ──
+        const statsParts: string[] = [];
+
         // context % with threshold coloring (always first)
         const contextPercentNum =
           contextTokens !== null && contextWindow > 0 ? (contextTokens / contextWindow) * 100 : 0;
@@ -232,38 +234,36 @@ function createFooterRenderer(ctx: ExtensionContext) {
           contextPercent === '?'
             ? `?/${formatTokens(contextWindow)}`
             : `${contextPercent}%/${formatTokens(contextWindow)}${autoCompactEnabled ? ' (auto)' : ''}`;
-        let contextStr: string;
+        let contextPercentStr: string;
         if (contextPercentNum > 90) {
-          contextStr = theme.fg('error', contextPercentDisplay);
+          contextPercentStr = theme.fg('error', contextPercentDisplay);
         } else if (contextPercentNum > 70) {
-          contextStr = theme.fg('warning', contextPercentDisplay);
+          contextPercentStr = theme.fg('warning', contextPercentDisplay);
         } else {
-          contextStr = contextPercentDisplay;
+          contextPercentStr = contextPercentDisplay;
         }
+        statsParts.push(contextPercentStr);
 
-        // token stats (dim)
-        const tokenParts: string[] = [];
-        if (totalInput) tokenParts.push(`↑${formatTokens(totalInput)}`);
-        if (totalOutput) tokenParts.push(`↓${formatTokens(totalOutput)}`);
-        if (totalCacheRead) tokenParts.push(`R${formatTokens(totalCacheRead)}`);
-        if (totalCacheWrite) tokenParts.push(`W${formatTokens(totalCacheWrite)}`);
+        if (totalInput) statsParts.push(`↑${formatTokens(totalInput)}`);
+        if (totalOutput) statsParts.push(`↓${formatTokens(totalOutput)}`);
+        if (totalCacheRead) statsParts.push(`R${formatTokens(totalCacheRead)}`);
+        if (totalCacheWrite) statsParts.push(`W${formatTokens(totalCacheWrite)}`);
 
         const usingSubscription = ctx.model ? ctx.modelRegistry.isUsingOAuth(ctx.model) : false;
         if (totalCost || usingSubscription) {
           const costStr = `$${totalCost.toFixed(3)}${usingSubscription ? ' (sub)' : ''}`;
-          tokenParts.push(costStr);
+          statsParts.push(costStr);
         }
 
-        const dimTokenStats =
-          tokenParts.length > 0 ? ` ${theme.fg('dim', tokenParts.join(' '))}` : '';
-        let statsLeft = contextStr + dimTokenStats;
+        let statsLeft = statsParts.join(' ');
         let statsLeftWidth = visibleWidth(statsLeft);
         if (statsLeftWidth > width) {
           statsLeft = truncateToWidth(statsLeft, width, '...');
           statsLeftWidth = visibleWidth(statsLeft);
         }
 
-        // ── stats line layout: left (context colored + token dim) + padding (dim) + right (colored think level) ──
+        // ── stats line layout: left (dim) + padding (dim) + right (colored think level) ──
+        const dimLeft = theme.fg('dim', statsLeft);
 
         // right side: think level only, colored (omitted when model lacks reasoning)
         let rightSidePlain = '';
@@ -298,7 +298,7 @@ function createFooterRenderer(ctx: ExtensionContext) {
           coloredRight = theme.fg(THINK_COLORS[tl] ?? 'thinkingOff', rightFinal);
         }
 
-        const statsLine = statsLeft + dimPadding + coloredRight;
+        const statsLine = dimLeft + dimPadding + coloredRight;
 
         const lines = [statsLine];
 
