@@ -122,19 +122,7 @@ function createFooterRenderer(ctx: ExtensionContext) {
         const contextPercent =
           contextUsage?.percent !== null ? contextPercentValue.toFixed(1) : '?';
 
-        // ── line 1: pwd + git branch + session name ──
-        let pwd = ctx.sessionManager.getCwd();
-        const home = process.env.HOME || process.env.USERPROFILE;
-        if (home && pwd.startsWith(home)) {
-          pwd = `~${pwd.slice(home.length)}`;
-        }
-        const branch = footerData.getGitBranch();
-        if (branch) pwd = `${pwd} (${branch})`;
-        const sessionName = ctx.sessionManager.getSessionName();
-        if (sessionName) pwd = `${pwd} • ${sessionName}`;
-        const pwdLine = truncateToWidth(theme.fg('dim', pwd), width, theme.fg('dim', '...'));
-
-        // ── line 2: stats + model ──
+        // ── stats + model ──
         const statsParts: string[] = [];
         if (totalInput) statsParts.push(`↑${formatTokens(totalInput)}`);
         if (totalOutput) statsParts.push(`↓${formatTokens(totalOutput)}`);
@@ -210,7 +198,7 @@ function createFooterRenderer(ctx: ExtensionContext) {
         const tail = statsLine.slice(statsLeft.length);
         const dimTail = theme.fg('dim', tail);
 
-        const lines = [pwdLine, dimLeft + dimTail];
+        const lines = [dimLeft + dimTail];
 
         // ── line 3: extension statuses ──
         const extensionStatuses = footerData.getExtensionStatuses() as Map<string, string>;
