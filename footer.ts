@@ -55,6 +55,27 @@ function getSettingsFlag(cwd: string, flagName: string, fallback: boolean): bool
   return fallback;
 }
 
+/** Read auto-compact setting from .pi/settings.json (nested under compaction.enabled). */
+function readAutoCompactEnabled(cwd: string): boolean {
+  const settingsPath = join(cwd, '.pi', 'settings.json');
+  if (existsSync(settingsPath)) {
+    try {
+      const content = readFileSync(settingsPath, 'utf-8');
+      const settings = JSON.parse(content || '{}');
+      if (
+        settings.compaction &&
+        typeof settings.compaction === 'object' &&
+        'enabled' in (settings.compaction as Record<string, unknown>)
+      ) {
+        return !!(settings.compaction as Record<string, unknown>).enabled;
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return true;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // token formatting (mirrors built-in footer)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -134,6 +155,7 @@ let liveThinkLevel = 'off';
 let liveTui: any = null;
 let isStreaming = false;
 let liveAssistantUsage: SessionAssistantUsage | null = null;
+let autoCompactEnabled = true;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // footer renderer
@@ -221,7 +243,7 @@ function createFooterRenderer(ctx: ExtensionContext) {
         const contextPercentDisplay =
           contextPercent === '?'
             ? `?/${formatTokens(contextWindow)}`
-            : `${contextPercent}%/${formatTokens(contextWindow)}`;
+            : `${contextPercent}%/${formatTokens(contextWindow)}${autoCompactEnabled ? ' (auto)' : ''}`;
         let contextPercentStr: string;
         if (contextPercentNum > 90) {
           contextPercentStr = theme.fg('error', contextPercentDisplay);
@@ -322,6 +344,8 @@ export function registerFooter(pi: ExtensionAPI) {
 
   // auto-enable on session start if flag is set
   pi.on('session_start', (_event, ctx) => {
+    // read auto-compact setting from .pi/settings.json (nested under compaction.enabled)
+    autoCompactEnabled = readAutoCompactEnabled(ctx.cwd);
     if (getSettingsFlag(ctx.cwd, 'customFooter', true)) {
       enable(ctx);
     }
