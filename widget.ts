@@ -3,51 +3,12 @@
  *
  * Powerline-style status widget displayed above the input editor.
  * Shows:  model → current folder.
- *
- * Controlled by .pi/settings.json → customWidget (boolean, default true).
- * Toggle at runtime with /powerline widget.
+ * Only active when breadcrumb mode is "top" in .pi/settings.json.
  */
-
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename } from 'node:path';
-import { join } from 'node:path';
 import type { ExtensionAPI, ExtensionContext, Theme } from '@mariozechner/pi-coding-agent';
 import { truncateToWidth, visibleWidth } from '@mariozechner/pi-tui';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// settings helpers
-// ═══════════════════════════════════════════════════════════════════════════
-
-function updateSettingsFlag(cwd: string, flagName: string, value: boolean): void {
-  const settingsDir = join(cwd, '.pi');
-  const settingsPath = join(settingsDir, 'settings.json');
-
-  let settings: Record<string, unknown> = {};
-  if (existsSync(settingsPath)) {
-    try {
-      settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
-    } catch {
-      settings = {};
-    }
-  } else {
-    mkdirSync(settingsDir, { recursive: true });
-  }
-
-  settings[flagName] = value;
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-}
-
-function getSettingsFlag(cwd: string, flagName: string, fallback: boolean): boolean {
-  const settingsPath = join(cwd, '.pi', 'settings.json');
-  if (!existsSync(settingsPath)) return fallback;
-  try {
-    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
-    if (flagName in settings) return !!settings[flagName];
-  } catch {
-    // ignore parse errors
-  }
-  return fallback;
-}
+import { readPowerlineSettings } from './settings.ts';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // icons & colors
@@ -76,6 +37,7 @@ function withIcon(icon: string, text: string): string {
 
 let liveCtx: ExtensionContext | null = null;
 let liveTui: any = null;
+let widgetEnabled = false;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // widget renderer
@@ -128,14 +90,6 @@ function createWidgetRenderer() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function registerWidget(pi: ExtensionAPI) {
-  pi.registerFlag('customWidget', {
-    description: 'Enable powerline status widget above editor',
-    type: 'boolean',
-    default: true,
-  });
-
-  let widgetEnabled = true;
-
   function enable(ctx: ExtensionContext) {
     widgetEnabled = true;
     liveCtx = ctx;
@@ -150,33 +104,25 @@ export function registerWidget(pi: ExtensionAPI) {
     ctx.ui.setWidget('powerline-status', undefined);
   }
 
+  // enable only when breadcrumb mode is "top"
   pi.on('session_start', (_event, ctx) => {
     if (!ctx.hasUI) return;
-    if (getSettingsFlag(ctx.cwd, 'customWidget', true)) {
+    const { breadcrumb } = readPowerlineSettings(ctx.cwd);
+    if (breadcrumb === 'top') {
       enable(ctx);
     }
   });
 
+  // re-evaluate on model switch (breadcrumb setting may have changed)
   pi.on('model_select', (_event, ctx) => {
-    if (!widgetEnabled) return;
-    liveCtx = ctx;
-    liveTui?.requestRender();
+    const { breadcrumb } = readPowerlineSettings(ctx.cwd);
+    if (breadcrumb === 'top' && !widgetEnabled) {
+      enable(ctx);
+    } else if (breadcrumb !== 'top' && widgetEnabled) {
+      disable(ctx);
+    } else if (widgetEnabled) {
+      liveCtx = ctx;
+      liveTui?.requestRender();
+    }
   });
-
-  return {
-    toggle(ctx: ExtensionContext): string {
-      if (widgetEnabled) {
-        disable(ctx);
-        updateSettingsFlag(ctx.cwd, 'customWidget', false);
-        return 'powerline widget disabled';
-      } else {
-        enable(ctx);
-        updateSettingsFlag(ctx.cwd, 'customWidget', true);
-        return 'powerline widget enabled';
-      }
-    },
-    get enabled(): boolean {
-      return widgetEnabled;
-    },
-  };
 }

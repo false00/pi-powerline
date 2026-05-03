@@ -4,45 +4,143 @@ import { registerEditor } from './editor.ts';
 import { registerFooter } from './footer.ts';
 import { registerHeader } from './header.ts';
 import { registerWidget } from './widget.ts';
+import { readPowerlineSettings, writePowerlineSetting } from './settings.ts';
 
 export default function (pi: ExtensionAPI) {
-  const editor = registerEditor(pi);
-  const footer = registerFooter(pi);
-  const header = registerHeader(pi);
-  const widget = registerWidget(pi);
+  // flags
+  pi.registerFlag('breadcrumb', {
+    description: 'Breadcrumb display mode: hide, top, inner',
+    type: 'string',
+    default: 'inner',
+  });
 
+  pi.registerFlag('footer', {
+    description: 'Enable custom footer with token stats',
+    type: 'boolean',
+    default: true,
+  });
+
+  pi.registerFlag('header', {
+    description: 'Enable custom gradient-logo header',
+    type: 'boolean',
+    default: true,
+  });
+
+  // register all sub-extensions
+  registerEditor(pi);
+  registerFooter(pi);
+  registerHeader(pi);
+  registerWidget(pi);
+
+  // unified /powerline command
   pi.registerCommand('powerline', {
-    description: 'Toggle powerline modules: editor, footer, header, widget',
+    description: 'Configure powerline: breadcrumb, footer, header',
     getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
       const items: AutocompleteItem[] = [
-        { value: 'editor', label: 'editor', description: 'Toggle custom input editor' },
-        { value: 'footer', label: 'footer', description: 'Toggle custom footer' },
-        { value: 'header', label: 'header', description: 'Toggle custom header' },
-        { value: 'widget', label: 'widget', description: 'Toggle editor status widget' },
+        {
+          value: 'breadcrumb:hide',
+          label: 'breadcrumb:hide',
+          description: 'No breadcrumb display',
+        },
+        {
+          value: 'breadcrumb:top',
+          label: 'breadcrumb:top',
+          description: 'Breadcrumb as a widget above the editor',
+        },
+        {
+          value: 'breadcrumb:inner',
+          label: 'breadcrumb:inner',
+          description: 'Breadcrumb embedded in editor top border',
+        },
+        {
+          value: 'footer:on',
+          label: 'footer:on',
+          description: 'Enable custom footer',
+        },
+        {
+          value: 'footer:off',
+          label: 'footer:off',
+          description: 'Disable custom footer',
+        },
+        {
+          value: 'header:on',
+          label: 'header:on',
+          description: 'Enable custom header',
+        },
+        {
+          value: 'header:off',
+          label: 'header:off',
+          description: 'Disable custom header',
+        },
       ];
       if (!prefix) return items;
       return items.filter((i) => i.value.startsWith(prefix));
     },
     handler: async (args, ctx) => {
-      const module = args?.trim().toLowerCase();
-      let msg: string;
-      switch (module) {
-        case 'editor':
-          msg = editor.toggle(ctx);
+      const arg = args?.trim().toLowerCase();
+
+      // no args: show status
+      if (!arg) {
+        const { breadcrumb, footer, header } = readPowerlineSettings(ctx.cwd);
+        const lines = [
+          `breadcrumb: ${breadcrumb}`,
+          `footer: ${footer ? 'on' : 'off'}`,
+          `header: ${header ? 'on' : 'off'}`,
+        ];
+        ctx.ui.notify(lines.join('\n'), 'info');
+        return;
+      }
+
+      // parse namespace:value
+      const colonIdx = arg.indexOf(':');
+      if (colonIdx === -1) {
+        ctx.ui.notify(
+          'Usage: /powerline <breadcrumb:hide|top|inner|footer:on|off|header:on|off>',
+          'warning',
+        );
+        return;
+      }
+
+      const ns = arg.slice(0, colonIdx);
+      const val = arg.slice(colonIdx + 1);
+      let msg = '';
+
+      switch (ns) {
+        case 'breadcrumb': {
+          if (!['hide', 'top', 'inner'].includes(val)) {
+            ctx.ui.notify('breadcrumb must be: hide, top, or inner', 'warning');
+            return;
+          }
+          writePowerlineSetting(ctx.cwd, 'breadcrumb', val);
+          msg = `breadcrumb → ${val}`;
           break;
-        case 'footer':
-          msg = footer.toggle(ctx);
+        }
+        case 'footer': {
+          if (val !== 'on' && val !== 'off') {
+            ctx.ui.notify('footer must be: on or off', 'warning');
+            return;
+          }
+          writePowerlineSetting(ctx.cwd, 'footer', val === 'on');
+          msg = `footer → ${val}`;
           break;
-        case 'header':
-          msg = header.toggle(ctx);
+        }
+        case 'header': {
+          if (val !== 'on' && val !== 'off') {
+            ctx.ui.notify('header must be: on or off', 'warning');
+            return;
+          }
+          writePowerlineSetting(ctx.cwd, 'header', val === 'on');
+          msg = `header → ${val}`;
           break;
-        case 'widget':
-          msg = widget.toggle(ctx);
-          break;
+        }
         default:
-          ctx.ui.notify(`Usage: /powerline <editor|footer|header|widget>`, 'warning');
+          ctx.ui.notify(
+            'Usage: /powerline <breadcrumb:hide|top|inner|footer:on|off|header:on|off>',
+            'warning',
+          );
           return;
       }
+
       ctx.ui.notify(msg, 'info');
     },
   });

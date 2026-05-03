@@ -7,55 +7,20 @@
  * Git branch, provider count, extension statuses come from footerData.
  * Thinking level comes from pi.getThinkingLevel() + pi.on(thinking_level_select).
  *
- * Controlled by .pi/settings.json → customFooter (boolean, default true).
- * Toggle at runtime with /footer command.
+ * Controlled by .pi/settings.json → footer (boolean, default true).
+ * Toggle at runtime via /powerline footer:on / footer:off.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AssistantMessage } from '@mariozechner/pi-ai';
 import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
 import { truncateToWidth, visibleWidth } from '@mariozechner/pi-tui';
+import { readPowerlineSettings } from './settings.ts';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// settings helpers
+// auto-compact detection (nested under compaction.enabled, not powerline)
 // ═══════════════════════════════════════════════════════════════════════════
-
-function updateSettingsFlag(cwd: string, flagName: string, value: boolean): void {
-  const settingsDir = join(cwd, '.pi');
-  const settingsPath = join(settingsDir, 'settings.json');
-
-  let settings: Record<string, unknown> = {};
-  if (existsSync(settingsPath)) {
-    try {
-      const content = readFileSync(settingsPath, 'utf-8');
-      settings = JSON.parse(content || '{}');
-    } catch {
-      settings = {};
-    }
-  } else if (!existsSync(settingsDir)) {
-    mkdirSync(settingsDir, { recursive: true });
-  }
-
-  settings[flagName] = value;
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-}
-
-function getSettingsFlag(cwd: string, flagName: string, fallback: boolean): boolean {
-  const settingsPath = join(cwd, '.pi', 'settings.json');
-  if (existsSync(settingsPath)) {
-    try {
-      const content = readFileSync(settingsPath, 'utf-8');
-      const settings = JSON.parse(content || '{}');
-      if (flagName in settings) return !!settings[flagName];
-    } catch {
-      // ignore parse errors
-    }
-  }
-  return fallback;
-}
-
-/** Read auto-compact setting from .pi/settings.json (nested under compaction.enabled). */
 function readAutoCompactEnabled(cwd: string): boolean {
   const settingsPath = join(cwd, '.pi', 'settings.json');
   if (existsSync(settingsPath)) {
@@ -359,12 +324,6 @@ function createFooterRenderer(ctx: ExtensionContext) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function registerFooter(pi: ExtensionAPI) {
-  pi.registerFlag('customFooter', {
-    description: 'Enable custom footer with token stats',
-    type: 'boolean',
-    default: true,
-  });
-
   let enabled = false;
 
   function enable(ctx: ExtensionContext) {
@@ -379,11 +338,10 @@ export function registerFooter(pi: ExtensionAPI) {
     ctx.ui.setFooter(undefined);
   }
 
-  // auto-enable on session start if flag is set
+  // enable on session start if footer setting is true
   pi.on('session_start', (_event, ctx) => {
-    // read auto-compact setting from .pi/settings.json (nested under compaction.enabled)
     autoCompactEnabled = readAutoCompactEnabled(ctx.cwd);
-    if (getSettingsFlag(ctx.cwd, 'customFooter', true)) {
+    if (readPowerlineSettings(ctx.cwd).footer) {
       enable(ctx);
     }
   });
@@ -396,10 +354,16 @@ export function registerFooter(pi: ExtensionAPI) {
   });
 
   // model switch may affect reasoning support / provider count
-  pi.on('model_select', () => {
-    if (!enabled) return;
-    liveThinkLevel = pi.getThinkingLevel();
-    liveTui?.requestRender();
+  pi.on('model_select', (_event, ctx) => {
+    const show = readPowerlineSettings(ctx.cwd).footer;
+    if (show && !enabled) {
+      enable(ctx);
+    } else if (!show && enabled) {
+      disable(ctx);
+    } else if (enabled) {
+      liveThinkLevel = pi.getThinkingLevel();
+      liveTui?.requestRender();
+    }
   });
 
   // ── real-time token updates during streaming ──
@@ -428,21 +392,4 @@ export function registerFooter(pi: ExtensionAPI) {
     }
     liveTui?.requestRender();
   });
-
-  return {
-    toggle(ctx: ExtensionContext): string {
-      if (enabled) {
-        disable(ctx);
-        updateSettingsFlag(ctx.cwd, 'customFooter', false);
-        return 'powerline footer disabled';
-      } else {
-        enable(ctx);
-        updateSettingsFlag(ctx.cwd, 'customFooter', true);
-        return 'powerline footer enabled';
-      }
-    },
-    get enabled(): boolean {
-      return enabled;
-    },
-  };
 }

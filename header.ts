@@ -1,50 +1,12 @@
 /**
  * Custom Header Extension
  *
- * Toggles between the built-in header and a gradient-colored PI logo.
- * Controlled by .pi/settings.json → customHeader (boolean, default true).
- * Toggle at runtime with /header command.
+ * Shows a gradient-colored PI logo.
+ * Controlled by .pi/settings.json → header (boolean, default true).
  */
-
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ExtensionAPI, ExtensionContext, Theme } from '@mariozechner/pi-coding-agent';
 import { VERSION } from '@mariozechner/pi-coding-agent';
-/** Update a flag value in `cwd/.pi/settings.json` for persistence across restarts. */
-function updateSettingsFlag(cwd: string, flagName: string, value: boolean): void {
-  const settingsDir = join(cwd, '.pi');
-  const settingsPath = join(settingsDir, 'settings.json');
-
-  let settings: Record<string, unknown> = {};
-  if (existsSync(settingsPath)) {
-    try {
-      const content = readFileSync(settingsPath, 'utf-8');
-      settings = JSON.parse(content || '{}');
-    } catch {
-      settings = {};
-    }
-  } else if (!existsSync(settingsDir)) {
-    mkdirSync(settingsDir, { recursive: true });
-  }
-
-  settings[flagName] = value;
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-}
-
-/** Read a flag value from `cwd/.pi/settings.json`, falling back to `fallback`. */
-function getSettingsFlag(cwd: string, flagName: string, fallback: boolean): boolean {
-  const settingsPath = join(cwd, '.pi', 'settings.json');
-  if (existsSync(settingsPath)) {
-    try {
-      const content = readFileSync(settingsPath, 'utf-8');
-      const settings = JSON.parse(content || '{}');
-      if (flagName in settings) return !!settings[flagName];
-    } catch {
-      // ignore parse errors
-    }
-  }
-  return fallback;
-}
+import { readPowerlineSettings } from './settings.ts';
 
 /** Left-to-right ANSI gradient coloring. Spaces are left uncolored. */
 const GRADIENT_COLORS = [
@@ -92,15 +54,9 @@ function renderLogo(theme: Theme): string[] {
   return ['', ...lines, subtitle];
 }
 
-/** Register the custom header extension: flag and auto-enable on session start. */
+/** Register the custom header extension. */
 export function registerHeader(pi: ExtensionAPI) {
-  pi.registerFlag('customHeader', {
-    description: 'Enable custom gradient-logo header',
-    type: 'boolean',
-    default: true,
-  });
-
-  let headerEnabled = true;
+  let headerEnabled = false;
 
   function createHeaderComponent() {
     return (_tui: any, theme: Theme) => ({
@@ -121,30 +77,21 @@ export function registerHeader(pi: ExtensionAPI) {
     ctx.ui.setHeader(undefined);
   }
 
-  // auto-enable on session start if flag is set
-  pi.on('session_start', async (_event, ctx) => {
+  // auto-enable on session start if header setting is true
+  pi.on('session_start', (_event, ctx) => {
     if (!ctx.hasUI) return;
-    if (getSettingsFlag(ctx.cwd, 'customHeader', true)) {
+    if (readPowerlineSettings(ctx.cwd).header) {
       enable(ctx);
     }
   });
 
-  /** Toggle the custom header on/off and persist to settings.json. */
-  return {
-    toggle(ctx: ExtensionContext): string {
-      if (headerEnabled) {
-        disable(ctx);
-        updateSettingsFlag(ctx.cwd, 'customHeader', false);
-        return 'powerline header disabled';
-      } else {
-        enable(ctx);
-        updateSettingsFlag(ctx.cwd, 'customHeader', true);
-        return 'powerline header enabled';
-      }
-    },
-    /** Whether the header is currently enabled. */
-    get enabled(): boolean {
-      return headerEnabled;
-    },
-  };
+  // re-evaluate on model switch
+  pi.on('model_select', (_event, ctx) => {
+    const show = readPowerlineSettings(ctx.cwd).header;
+    if (show && !headerEnabled) {
+      enable(ctx);
+    } else if (!show && headerEnabled) {
+      disable(ctx);
+    }
+  });
 }
