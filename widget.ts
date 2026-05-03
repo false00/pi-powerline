@@ -90,6 +90,7 @@ function formatThinkLevel(level: string): string {
 
 let liveCtx: ExtensionContext | null = null;
 let liveThinkLevel = 'off';
+let liveTui: any = null;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // widget renderer
@@ -113,33 +114,38 @@ function hexFg(hex: string, text: string): string {
 }
 
 function createWidgetRenderer() {
-  return (_tui: any, theme: Theme) => ({
-    dispose() {},
-    invalidate() {},
-    render(width: number): string[] {
-      const ctx = liveCtx;
-      const cwd = ctx?.cwd ?? process.cwd();
-      const modelName = ctx?.model?.name || ctx?.model?.id || 'no-model';
-      const folder = basename(cwd) || cwd;
-      const level = liveThinkLevel;
+  return (_tui: any, theme: Theme) => {
+    liveTui = _tui;
+    return {
+      dispose() {
+        liveTui = null;
+      },
+      invalidate() {},
+      render(width: number): string[] {
+        const ctx = liveCtx;
+        const cwd = ctx?.cwd ?? process.cwd();
+        const modelName = ctx?.model?.name || ctx?.model?.id || 'no-model';
+        const folder = basename(cwd) || cwd;
+        const level = liveThinkLevel;
 
-      const modelText = withIcon(ICON_MODEL, modelName);
-      const thinkText = formatThinkLevel(level);
-      const folderText = withIcon(ICON_FOLDER, folder);
+        const modelText = withIcon(ICON_MODEL, modelName);
+        const thinkText = formatThinkLevel(level);
+        const folderText = withIcon(ICON_FOLDER, folder);
 
-      const line =
-        hexFg('#d787af', modelText) +
-        theme.fg('dim', ` ${SEP} `) +
-        theme.fg((THINK_COLORS[level] ?? 'thinkingOff') as any, thinkText) +
-        theme.fg('dim', ` ${SEP} `) +
-        hexFg('#00afaf', folderText) +
-        '\x1b[0m';
+        const line =
+          hexFg('#d787af', modelText) +
+          theme.fg('dim', ` ${SEP} `) +
+          theme.fg((THINK_COLORS[level] ?? 'thinkingOff') as any, thinkText) +
+          theme.fg('dim', ` ${SEP} `) +
+          hexFg('#00afaf', folderText) +
+          '\x1b[0m';
 
-      const visLen = visibleWidth(line);
-      const pad = Math.max(0, width - visLen);
-      return [line + ' '.repeat(pad)];
-    },
-  });
+        const visLen = visibleWidth(line);
+        const pad = Math.max(0, width - visLen);
+        return [line + ' '.repeat(pad)];
+      },
+    };
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -158,7 +164,7 @@ export function registerWidget(pi: ExtensionAPI) {
   function enable(ctx: ExtensionContext) {
     widgetEnabled = true;
     liveCtx = ctx;
-    liveThinkLevel = (ctx as any).getThinkingLevel?.() ?? 'off';
+    liveThinkLevel = pi.getThinkingLevel();
     ctx.ui.setWidget('powerline-status', createWidgetRenderer(), {
       placement: 'aboveEditor',
     });
@@ -180,20 +186,15 @@ export function registerWidget(pi: ExtensionAPI) {
   pi.on('thinking_level_select', (event, ctx) => {
     if (!widgetEnabled) return;
     liveCtx = ctx;
-    liveThinkLevel = (event as any).level ?? 'off';
-    // re-install widget to force pi to re-render with new think level
-    ctx.ui.setWidget('powerline-status', createWidgetRenderer(), {
-      placement: 'aboveEditor',
-    });
+    liveThinkLevel = event.level;
+    liveTui?.requestRender();
   });
 
   pi.on('model_select', (_event, ctx) => {
     if (!widgetEnabled) return;
     liveCtx = ctx;
-    liveThinkLevel = (ctx as any).getThinkingLevel?.() ?? 'off';
-    ctx.ui.setWidget('powerline-status', createWidgetRenderer(), {
-      placement: 'aboveEditor',
-    });
+    liveThinkLevel = pi.getThinkingLevel();
+    liveTui?.requestRender();
   });
 
   return {
