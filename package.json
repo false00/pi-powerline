@@ -1,0 +1,34 @@
+{
+  "name": "pi-powerline",
+  "version": "0.1.0",
+  "description": "Powerline-style UI extensions for pi coding agent (custom editor, footer, header)",
+  "type": "module",
+  "files": [
+    "*.ts"
+  ],
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "powerline",
+    "extension"
+  ],
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/**/*.test.ts",
+    "test:bun": "bun test",
+    "format": "prettier --write '**/*.ts'",
+    "format:check": "prettier --check '**/*.ts'",
+    "prepare": "husky"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "prettier": "^3.8.3"
+  }
+}

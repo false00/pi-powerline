@@ -1,0 +1,36 @@
+# pi 项目共享配置（extensions、settings 等提交到仓库）
+# 仅忽略运行时缓存
+.pi/cache/
+
+# tsconfig for editor LSP (machine-specific paths)
+tsconfig.json
+
+# Python 本地环境与缓存
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / JavaScript 本地依赖与缓存
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 系统生成文件
+.DS_Store
+**/.DS_Store
+Thumbs.db
+**/Thumbs.db
+Desktop.ini
+**/Desktop.ini
+
+# 编辑器与临时文件
+*.swp
+*.swo
+*~
