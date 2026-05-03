@@ -62,7 +62,7 @@ function hasNerdFonts(): boolean {
 }
 
 const NERD = hasNerdFonts();
-const ICON_MODEL = NERD ? '\uEC19' : '';
+const ICON_MODEL = NERD ? '\uF4BC' : '';
 const ICON_FOLDER = NERD ? '\uF115' : 'dir';
 const SEP = NERD ? '\uE0B1' : '|';
 

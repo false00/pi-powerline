@@ -101,6 +101,7 @@ function hasNerdFonts(): boolean {
 }
 
 const ICON_THINK = hasNerdFonts() ? '' : '';
+const ICON_GIT = hasNerdFonts() ? '' : '⎇';
 
 function withIcon(icon: string, text: string): string {
   return icon ? `${icon} ${text}` : text;
@@ -160,6 +161,15 @@ let autoCompactEnabled = true;
 // ═══════════════════════════════════════════════════════════════════════════
 // footer renderer
 // ═══════════════════════════════════════════════════════════════════════════
+
+// hex → ANSI true color (for git branch, not using pi theme tokens)
+function hexFg(hex: string, text: string): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `\x1b[38;2;${r};${g};${b}m${text}`;
+}
 
 /** Sanitize text for single-line status display. */
 function sanitizeStatusText(text: string): string {
@@ -224,6 +234,12 @@ function createFooterRenderer(ctx: ExtensionContext) {
         const contextPercent =
           contextTokens !== null ? ((contextTokens / contextWindow) * 100).toFixed(1) : '?';
 
+        // ── git branch (leftmost, before stats) ──
+        const branch = footerData.getGitBranch();
+        const gitSegment = branch ? hexFg('#5faf5f', withIcon(ICON_GIT, branch)) : '';
+        const gitFull = gitSegment ? gitSegment + ' ' : '';
+        const gitFullWidth = gitSegment ? visibleWidth(gitSegment) + 1 : 0;
+
         // ── stats + model ──
         const statsParts: string[] = [];
 
@@ -262,7 +278,7 @@ function createFooterRenderer(ctx: ExtensionContext) {
           statsLeftWidth = visibleWidth(statsLeft);
         }
 
-        // ── stats line layout: left (dim) + padding (dim) + right (colored think level) ──
+        // ── stats line layout: git (green) + left (dim) + padding (dim) + right (colored think level) ──
         const dimLeft = theme.fg('dim', statsLeft);
 
         // right side: think level only, colored (omitted when model lacks reasoning)
@@ -270,35 +286,55 @@ function createFooterRenderer(ctx: ExtensionContext) {
         if (ctx.model?.reasoning) {
           const tl = liveThinkLevel || 'off';
           const label = THINK_LABELS[tl] ?? tl;
-          rightSidePlain = withIcon(ICON_THINK, `think:${label}`);
+          rightSidePlain = withIcon(ICON_THINK, label);
         }
+        const rightWidth = visibleWidth(rightSidePlain);
 
         const minPad = 2;
-        let paddingLen: number;
-        let rightFinal: string;
+        let statsLine: string;
 
-        if (statsLeftWidth + minPad + visibleWidth(rightSidePlain) <= width) {
-          paddingLen = width - statsLeftWidth - visibleWidth(rightSidePlain);
-          rightFinal = rightSidePlain;
-        } else {
-          const avail = width - statsLeftWidth - minPad;
-          if (avail > 0) {
-            rightFinal = truncateToWidth(rightSidePlain, avail, '');
-            paddingLen = width - statsLeftWidth - visibleWidth(rightFinal);
-          } else {
-            rightFinal = '';
-            paddingLen = width - statsLeftWidth;
+        const totalBase = gitFullWidth + statsLeftWidth + minPad + rightWidth;
+        if (totalBase <= width) {
+          // everything fits
+          const pad = width - gitFullWidth - statsLeftWidth - rightWidth;
+          const dimPadding = pad > 0 ? theme.fg('dim', ' '.repeat(pad)) : '';
+          let coloredRight = '';
+          if (rightSidePlain) {
+            const tl = liveThinkLevel || 'off';
+            coloredRight = theme.fg(THINK_COLORS[tl] ?? 'thinkingOff', rightSidePlain);
           }
+          statsLine = gitFull + dimLeft + dimPadding + coloredRight;
+        } else if (gitFullWidth + minPad + rightWidth <= width) {
+          // drop git → fit statsLeft
+          const availStats = width - gitFullWidth - minPad - rightWidth;
+          let statsTrimmed: string;
+          let statsTrimmedWidth: number;
+          if (availStats > 0) {
+            statsTrimmed = truncateToWidth(statsLeft, availStats, '');
+            statsTrimmedWidth = visibleWidth(statsTrimmed);
+          } else {
+            statsTrimmed = '';
+            statsTrimmedWidth = 0;
+          }
+          const pad = width - gitFullWidth - statsTrimmedWidth - rightWidth;
+          const dimPadding = pad > 0 ? theme.fg('dim', ' '.repeat(pad)) : '';
+          let coloredRight = '';
+          if (rightSidePlain) {
+            const tl = liveThinkLevel || 'off';
+            coloredRight = theme.fg(THINK_COLORS[tl] ?? 'thinkingOff', rightSidePlain);
+          }
+          statsLine = gitFull + theme.fg('dim', statsTrimmed) + dimPadding + coloredRight;
+        } else {
+          // drop git, drop right → only stats
+          const availStats = width - minPad;
+          let statsTrimmed: string;
+          if (availStats > 0) {
+            statsTrimmed = truncateToWidth(statsLeft, availStats, '');
+          } else {
+            statsTrimmed = '';
+          }
+          statsLine = theme.fg('dim', statsTrimmed);
         }
-
-        const dimPadding = paddingLen > 0 ? theme.fg('dim', ' '.repeat(paddingLen)) : '';
-        let coloredRight = '';
-        if (rightFinal) {
-          const tl = liveThinkLevel || 'off';
-          coloredRight = theme.fg(THINK_COLORS[tl] ?? 'thinkingOff', rightFinal);
-        }
-
-        const statsLine = dimLeft + dimPadding + coloredRight;
 
         const lines = [statsLine];
 
