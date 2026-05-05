@@ -1,3 +1,18 @@
+## [0.2.2] - 2026-05-05
+
+### 🐛 Bug Fixes
+
+- Use GitHub raw URL for screenshot in README
+
+### ⚙️ Miscellaneous Tasks
+
+- Add homepage and repository fields to package.json
+## [0.2.1] - 2026-05-05
+
+### ⚙️ Miscellaneous Tasks
+
+- Add git-cliff changelog
+- Bump version to 0.2.1
 ## [0.2.0] - 2026-05-05
 
 ### 🚀 Features
