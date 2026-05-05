@@ -2,7 +2,7 @@
 
 Powerline-style UI extensions for [pi](https://github.com/badlogic/pi-mono): custom editor, breadcrumb, footer, and header.
 
-![screenshot](assets/pi-powerline.png)
+![screenshot](https://raw.githubusercontent.com/jwu/pi-powerline/refs/heads/main/assets/pi-powerline.png)
 
 ## Install
 
