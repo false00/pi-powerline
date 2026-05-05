@@ -1,6 +1,6 @@
 {
   "name": "pi-powerline",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Powerline-style UI extensions for pi coding agent (custom editor, breadcrumb, footer, header)",
   "type": "module",
   "files": [
