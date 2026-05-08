@@ -339,7 +339,9 @@ function getExtensionItems(cwd: string, commands: SlashCommandInfo[]): string[] 
 
 function shouldShowHeaderInfo(ctx: ExtensionContext, reason: SessionStartEvent['reason']): boolean {
   if (reason !== 'startup' && reason !== 'reload') return false;
-  return readPowerlineSettings(ctx.cwd)['header-info'];
+  const settings = readPowerlineSettings(ctx.cwd);
+  if (!settings.quietStartup) return false;
+  return settings['header-info'];
 }
 
 function collectHeaderInfo(

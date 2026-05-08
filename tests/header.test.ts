@@ -145,9 +145,13 @@ function stripAnsi(line: string): string {
   return line.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-function enableHeaderInfo(cwd: string): void {
+function writeHeaderSettings(cwd: string, settings: Record<string, unknown>): void {
   mkdirSync(join(cwd, '.pi'), { recursive: true });
-  writeFileSync(join(cwd, '.pi', 'settings.json'), JSON.stringify({ 'header-info': true }));
+  writeFileSync(join(cwd, '.pi', 'settings.json'), JSON.stringify(settings));
+}
+
+function enableHeaderInfo(cwd: string): void {
+  writeHeaderSettings(cwd, { 'header-info': true, quietStartup: true });
 }
 
 interface RenderHeaderOptions {
@@ -251,6 +255,39 @@ test('header hides diagnostic info for new sessions even when enabled', () => {
     const lines = renderHeader('new', 80, { cwd }).map(stripAnsi);
 
     assert.ok(lines.some((line) => line.includes('New Session Started')));
+    assert.ok(!lines.includes('[Context]'));
+    assert.ok(!lines.includes('[Skills]'));
+    assert.ok(!lines.includes('[Prompts]'));
+    assert.ok(!lines.includes('[Extensions]'));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header shows diagnostic info when quietStartup is true', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  try {
+    writeHeaderSettings(cwd, { 'header-info': true, quietStartup: true });
+    writeFileSync(join(cwd, 'AGENTS.md'), 'project context');
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Context]'));
+    assert.ok(lines.includes('  • AGENTS.md'));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header hides diagnostic info when quietStartup is false', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  try {
+    writeHeaderSettings(cwd, { 'header-info': true, quietStartup: false });
+    writeFileSync(join(cwd, 'AGENTS.md'), 'project context');
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.some((line) => line.includes('Welcome')));
     assert.ok(!lines.includes('[Context]'));
     assert.ok(!lines.includes('[Skills]'));
     assert.ok(!lines.includes('[Prompts]'));

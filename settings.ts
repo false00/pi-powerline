@@ -1,5 +1,6 @@
 // shared settings read/write helpers for pi-powerline
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 export type BreadcrumbMode = 'hide' | 'top' | 'inner';
@@ -10,6 +11,7 @@ export interface PowerlineSettings {
   footer: boolean;
   header: boolean;
   'header-info': boolean;
+  quietStartup: boolean;
 }
 
 const DEFAULTS: PowerlineSettings = {
@@ -18,22 +20,47 @@ const DEFAULTS: PowerlineSettings = {
   footer: true,
   header: true,
   'header-info': false,
+  quietStartup: false,
 };
 
-function readSettings(cwd: string): Record<string, unknown> {
-  const settingsPath = join(cwd, '.pi', 'settings.json');
+function getSettingsPath(): string {
+  return join(process.env.HOME ?? homedir(), '.pi', 'agent', 'settings.json');
+}
+
+function getProjectSettingsPath(cwd: string): string {
+  return join(cwd, '.pi', 'settings.json');
+}
+
+function readSettingsFile(settingsPath: string): Record<string, unknown> {
   if (!existsSync(settingsPath)) return {};
   try {
-    return JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    const value = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   } catch {
     return {};
   }
 }
 
+function mergeSettings(
+  globalSettings: Record<string, unknown>,
+  projectSettings: Record<string, unknown>,
+): Record<string, unknown> {
+  return { ...globalSettings, ...projectSettings };
+}
+
+export function readSettings(cwd: string = process.cwd()): Record<string, unknown> {
+  return mergeSettings(
+    readSettingsFile(getSettingsPath()),
+    readSettingsFile(getProjectSettingsPath(cwd)),
+  );
+}
+
 function writeSettings(cwd: string, settings: Record<string, unknown>): void {
   const settingsDir = join(cwd, '.pi');
   if (!existsSync(settingsDir)) mkdirSync(settingsDir, { recursive: true });
-  writeFileSync(join(settingsDir, 'settings.json'), JSON.stringify(settings, null, 2) + '\n');
+  writeFileSync(getProjectSettingsPath(cwd), JSON.stringify(settings, null, 2) + '\n');
 }
 
 /** Read powerline settings, validating and applying defaults. */
@@ -48,6 +75,7 @@ export function readPowerlineSettings(cwd: string): PowerlineSettings {
     header: typeof s.header === 'boolean' ? s.header : DEFAULTS.header,
     'header-info':
       typeof s['header-info'] === 'boolean' ? s['header-info'] : DEFAULTS['header-info'],
+    quietStartup: typeof s.quietStartup === 'boolean' ? s.quietStartup : DEFAULTS.quietStartup,
   };
 }
 

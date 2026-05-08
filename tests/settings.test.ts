@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { readPowerlineSettings } from '../settings.ts';
+import { readPowerlineSettings, readSettings } from '../settings.ts';
 
 // ── helpers ──
 
@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS = {
   footer: true,
   header: true,
   'header-info': false,
+  quietStartup: false,
 } as const;
 
 // ── defaults ──
@@ -60,6 +61,7 @@ test('all values overridden', () => {
     footer: false,
     header: false,
     'header-info': true,
+    quietStartup: true,
   });
 
   assert.deepEqual(readPowerlineSettings(dir), {
@@ -68,6 +70,7 @@ test('all values overridden', () => {
     footer: false,
     header: false,
     'header-info': true,
+    quietStartup: true,
   });
 
   rmSync(dir, { recursive: true, force: true });
@@ -90,6 +93,9 @@ test('individual boolean fields can be toggled', () => {
 
   writeSettingsFile(dir, { 'header-info': true });
   assert.deepEqual(readPowerlineSettings(dir)['header-info'], true);
+
+  writeSettingsFile(dir, { quietStartup: true });
+  assert.deepEqual(readPowerlineSettings(dir).quietStartup, true);
 
   rmSync(dir, { recursive: true, force: true });
 });
@@ -114,13 +120,14 @@ test('non-boolean powerline falls back to default', () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('non-boolean footer/header/header-info falls back to default', () => {
+test('non-boolean footer/header/header-info/quietStartup falls back to default', () => {
   const dir = mkdtempSync('pi-settings-test-');
-  writeSettingsFile(dir, { footer: 1, header: 0, 'header-info': 'yes' });
+  writeSettingsFile(dir, { footer: 1, header: 0, 'header-info': 'yes', quietStartup: 'yes' });
 
   assert.deepEqual(readPowerlineSettings(dir).footer, true);
   assert.deepEqual(readPowerlineSettings(dir).header, true);
   assert.deepEqual(readPowerlineSettings(dir)['header-info'], false);
+  assert.deepEqual(readPowerlineSettings(dir).quietStartup, false);
 
   rmSync(dir, { recursive: true, force: true });
 });
@@ -156,4 +163,35 @@ test('extra keys in settings.json do not affect powerline settings', () => {
   });
 
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('readSettings returns merged raw global and project settings', () => {
+  const originalHome = process.env.HOME;
+  const home = mkdtempSync('pi-settings-home-');
+  const dir = mkdtempSync('pi-settings-test-');
+
+  try {
+    process.env.HOME = home;
+    mkdirSync(join(home, '.pi', 'agent'), { recursive: true });
+    writeFileSync(
+      join(home, '.pi', 'agent', 'settings.json'),
+      JSON.stringify({ theme: 'dark', footer: false, quietStartup: true }),
+    );
+    writeSettingsFile(dir, { footer: true, header: false });
+
+    assert.deepEqual(readSettings(dir), {
+      theme: 'dark',
+      footer: true,
+      quietStartup: true,
+      header: false,
+    });
+  } finally {
+    if (originalHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = originalHome;
+    }
+    rmSync(home, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
