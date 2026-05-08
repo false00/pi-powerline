@@ -191,7 +191,7 @@ function renderLogo(
     `prompts: ${info.promptsCount}`,
     `extensions: ${info.extensionsCount}`,
     `commands: ${info.commandsCount}`,
-  ].join('  ');
+  ].join(' | ');
 
   return [
     ...result,
