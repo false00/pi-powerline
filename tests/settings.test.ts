@@ -1,10 +1,28 @@
-import test from 'node:test';
+import test, { afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { readPowerlineSettings, readSettings } from '../settings.ts';
 
 // ── helpers ──
+
+const originalHome = process.env.HOME;
+let testHome: string | undefined;
+
+beforeEach(() => {
+  testHome = mkdtempSync('pi-settings-home-');
+  process.env.HOME = testHome;
+});
+
+afterEach(() => {
+  if (originalHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHome;
+  }
+  if (testHome) rmSync(testHome, { recursive: true, force: true });
+  testHome = undefined;
+});
 
 function writeSettingsFile(dir: string, content: unknown): void {
   const piDir = join(dir, '.pi');
@@ -17,7 +35,7 @@ const DEFAULT_SETTINGS = {
   breadcrumb: 'inner',
   footer: true,
   header: true,
-  'header-info': false,
+  'header-info': true,
   quietStartup: false,
 } as const;
 
@@ -126,7 +144,7 @@ test('non-boolean footer/header/header-info/quietStartup falls back to default',
 
   assert.deepEqual(readPowerlineSettings(dir).footer, true);
   assert.deepEqual(readPowerlineSettings(dir).header, true);
-  assert.deepEqual(readPowerlineSettings(dir)['header-info'], false);
+  assert.deepEqual(readPowerlineSettings(dir)['header-info'], true);
   assert.deepEqual(readPowerlineSettings(dir).quietStartup, false);
 
   rmSync(dir, { recursive: true, force: true });

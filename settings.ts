@@ -19,7 +19,7 @@ const DEFAULTS: PowerlineSettings = {
   breadcrumb: 'inner',
   footer: true,
   header: true,
-  'header-info': false,
+  'header-info': true,
   quietStartup: false,
 };
 

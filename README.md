@@ -28,7 +28,7 @@ Settings are read from both global and project files. Project settings override 
   "breadcrumb": "inner",
   "footer": true,
   "header": true,
-  "header-info": false
+  "header-info": true
 }
 ```
 
@@ -38,7 +38,7 @@ Settings are read from both global and project files. Project settings override 
 | `breadcrumb` | `"hide"` / `"top"` / `"inner"` | `"inner"` | Breadcrumb placement |
 | `footer` | `true` / `false` | `true` | Enable custom footer |
 | `header` | `true` / `false` | `true` | Enable custom gradient-logo header |
-| `header-info` | `true` / `false` | `false` | Show header diagnostic info on startup/reload |
+| `header-info` | `true` / `false` | `true` | Show header diagnostic info on startup/reload |
 
 ### Header info
 

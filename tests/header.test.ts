@@ -230,9 +230,10 @@ test('header center-wraps when width is too narrow', () => {
   assert.ok(lines.slice(1).every((line) => line.length <= 8));
 });
 
-test('header hides diagnostic info by default', () => {
+test('header hides diagnostic info when quietStartup is false by default', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
   try {
+    writeHeaderSettings(cwd, { quietStartup: false });
     writeFileSync(join(cwd, 'AGENTS.md'), 'project context');
 
     const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
