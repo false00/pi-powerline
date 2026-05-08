@@ -4,7 +4,12 @@
  * Shows a gradient-colored PI logo.
  * Controlled by .pi/settings.json → header (boolean, default true).
  */
-import type { ExtensionAPI, ExtensionContext, Theme } from '@mariozechner/pi-coding-agent';
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  SessionStartEvent,
+  Theme,
+} from '@mariozechner/pi-coding-agent';
 import { VERSION } from '@mariozechner/pi-coding-agent';
 import { readPowerlineSettings } from './settings.ts';
 
@@ -39,6 +44,55 @@ function gradientLine(line: string): string {
   return result;
 }
 
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
+
+function visibleLength(line: string): number {
+  return line.replace(ANSI_PATTERN, '').length;
+}
+
+function centerTruncate(line: string, width: number): string {
+  if (width <= 0) return '';
+
+  const length = visibleLength(line);
+  if (length <= width) return line;
+
+  const reset = '\x1b[0m';
+  const start = Math.floor((length - width) / 2);
+  const end = start + width;
+  let activeAnsi = '';
+  let result = '';
+  let visibleIdx = 0;
+
+  for (let i = 0; i < line.length; ) {
+    const ansi = /^\x1b\[[0-9;]*m/.exec(line.slice(i));
+    if (ansi) {
+      const code = ansi[0];
+      activeAnsi = code === reset ? '' : code;
+      if (visibleIdx >= start && visibleIdx < end) {
+        result += code;
+      }
+      i += code.length;
+      continue;
+    }
+
+    const char = Array.from(line.slice(i))[0] ?? '';
+    if (visibleIdx >= start && visibleIdx < end) {
+      if (!result && activeAnsi) result += activeAnsi;
+      result += char;
+    }
+    visibleIdx++;
+    i += char.length;
+  }
+
+  return result.includes('\x1b[') ? result + reset : result;
+}
+
+function centerLine(line: string, width: number): string {
+  const centeredLine = centerTruncate(line, width);
+  const padding = Math.max(0, Math.floor((width - visibleLength(centeredLine)) / 2));
+  return ' '.repeat(padding) + centeredLine;
+}
+
 const PI_LOGO = [
   '██████████    ',
   '████  ████    ',
@@ -48,28 +102,51 @@ const PI_LOGO = [
   '████      ████',
 ];
 
-function renderLogo(theme: Theme): string[] {
-  const lines = PI_LOGO.map((line) => '  ' + gradientLine(line) + '\x1b[0m');
-  const subtitle = `${theme.fg('muted', '  pi agent')}${theme.fg('dim', ` v${VERSION}`)}`;
-  return ['', ...lines, subtitle];
+function formatReasonStatus(theme: Theme, reason: SessionStartEvent['reason']): string {
+  switch (reason) {
+    case 'startup':
+      return theme.fg('warning', 'Welcome');
+    case 'reload':
+      return theme.fg('success', 'Reloaded');
+    case 'new':
+      return theme.fg('success', 'New Session Started');
+    default:
+      return theme.fg('dim', reason);
+  }
+}
+
+function renderLogo(theme: Theme, reason: SessionStartEvent['reason'], width: number): string[] {
+  const logoWidth = Math.max(...PI_LOGO.map((line) => line.length));
+  const lines = PI_LOGO.map((line) =>
+    centerLine(gradientLine(line.padEnd(logoWidth)) + '\x1b[0m', width),
+  );
+  const subtitle = `${theme.fg('muted', 'pi agent')}${theme.fg('dim', ` v${VERSION}`)}`;
+  return [
+    '',
+    ...lines,
+    centerLine(subtitle, width),
+    centerLine(formatReasonStatus(theme, reason), width),
+  ];
 }
 
 /** Register the custom header extension. */
 export function registerHeader(pi: ExtensionAPI) {
   let headerEnabled = false;
+  let currentReason: SessionStartEvent['reason'] = 'startup';
 
-  function createHeaderComponent() {
+  function createHeaderComponent(reason: SessionStartEvent['reason']) {
     return (_tui: any, theme: Theme) => ({
-      render(_width: number): string[] {
-        return renderLogo(theme);
+      render(width: number): string[] {
+        return renderLogo(theme, reason, width);
       },
       invalidate() {},
     });
   }
 
-  function enable(ctx: ExtensionContext) {
+  function enable(ctx: ExtensionContext, reason = currentReason) {
     headerEnabled = true;
-    ctx.ui.setHeader(createHeaderComponent());
+    currentReason = reason;
+    ctx.ui.setHeader(createHeaderComponent(reason));
   }
 
   function disable(ctx: ExtensionContext) {
@@ -78,11 +155,11 @@ export function registerHeader(pi: ExtensionAPI) {
   }
 
   // auto-enable on session start if powerline master switch + header setting are both on
-  pi.on('session_start', (_event, ctx) => {
+  pi.on('session_start', (event, ctx) => {
     if (!ctx.hasUI) return;
     const s = readPowerlineSettings(ctx.cwd);
     if (s.powerline && s.header) {
-      enable(ctx);
+      enable(ctx, event.reason);
     }
   });
 

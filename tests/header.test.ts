@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { registerHeader } from '../header.ts';
 // gradientLine is in header.ts; reimplement inline for unit isolation
 const GRADIENT_COLORS = [
   '\x1b[38;5;199m',
@@ -135,4 +136,54 @@ test('renderLogo returns correct number of lines', async () => {
     // Non-space chars should be colored
     assert.ok(result.includes('\x1b['));
   }
+});
+
+function stripAnsi(line: string): string {
+  return line.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function renderHeader(reason: 'startup' | 'reload' | 'new', width: number): string[] {
+  let sessionStartHandler: ((event: { reason: string }, ctx: any) => void) | undefined;
+  let headerFactory:
+    | ((tui: any, theme: any) => { render: (width: number) => string[] })
+    | undefined;
+  const pi = {
+    on(event: string, handler: (event: { reason: string }, ctx: any) => void) {
+      if (event === 'session_start') sessionStartHandler = handler;
+    },
+    events: { on() {} },
+  };
+  const ctx = {
+    hasUI: true,
+    cwd: '/tmp/pi-powerline-test-missing-settings',
+    ui: {
+      setHeader(factory: typeof headerFactory) {
+        headerFactory = factory;
+      },
+    },
+  };
+  const theme = {
+    fg(_color: string, text: string) {
+      return `\x1b[31m${text}\x1b[0m`;
+    },
+  };
+
+  registerHeader(pi as any);
+  sessionStartHandler?.({ reason }, ctx);
+  assert.ok(headerFactory);
+  return headerFactory(undefined, theme).render(width);
+}
+
+test('header centers logo, version, and reason lines', () => {
+  const lines = renderHeader('startup', 30).map(stripAnsi);
+
+  assert.equal(lines.at(-1), `${' '.repeat(11)}Welcome`);
+  assert.ok(lines.slice(1).every((line) => line.length <= 30));
+});
+
+test('header center-truncates when width is too narrow', () => {
+  const lines = renderHeader('new', 8).map(stripAnsi);
+
+  assert.equal(lines.at(-1), 'ession S');
+  assert.ok(lines.slice(1).every((line) => line.length <= 8));
 });
