@@ -1,3 +1,9 @@
+## [0.5.1](https://github.com/jwu/pi-powerline/compare/v0.5.0...v0.5.1) (2026-05-12)
+
+### Code Refactoring
+
+* migrate peer deps from @mariozechner to @earendil-works scope ([3d7de22](https://github.com/jwu/pi-powerline/commit/3d7de22))
+
 # [0.5.0](https://github.com/jwu/pi-powerline/compare/v0.4.2...v0.5.0) (2026-05-12)
 
 
