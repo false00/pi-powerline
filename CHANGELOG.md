@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/jwu/pi-powerline/compare/v0.4.2...v0.5.0) (2026-05-12)
+
+
+### Features
+
+* show active tools in header info ([bcbc9a3](https://github.com/jwu/pi-powerline/commit/bcbc9a3d41b12ff86c252860cd941e4370d20108))
+
 ## [0.4.2](https://github.com/jwu/pi-powerline/compare/v0.4.1...v0.4.2) (2026-05-08)
 
 
