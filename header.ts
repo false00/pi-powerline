@@ -144,6 +144,8 @@ interface HeaderInfo {
   promptsCount: number;
   extensionsCount: number;
   commandsCount: number;
+  tools: string[];
+  toolsCount: number;
 }
 
 function renderBullet(theme: Theme, value: string, width: number): string[] {
@@ -195,6 +197,7 @@ function renderLogo(
     `prompts: ${info.promptsCount}`,
     `extensions: ${info.extensionsCount}`,
     `commands: ${info.commandsCount}`,
+    `tools: ${info.toolsCount}`,
   ].join(' | ');
 
   return [
@@ -203,6 +206,8 @@ function renderLogo(
     ...centerWrappedLines(theme.fg('dim', counts), width),
     '',
     ...renderInfoSection(theme, 'Context', info.contextItems, width),
+    '',
+    ...renderInfoSection(theme, 'Tools', info.tools, width),
     '',
     ...renderInfoSection(theme, 'Skills', info.skills, width),
     '',
@@ -360,6 +365,10 @@ function collectHeaderInfo(
   const allThemes = typeof ctx.ui.getAllThemes === 'function' ? ctx.ui.getAllThemes() : [];
   const themeName = theme.name ?? ctx.ui.theme?.name ?? 'current';
   const extensions = getExtensionItems(ctx.cwd, commands);
+  const activeTools =
+    typeof pi.getActiveTools === 'function'
+      ? pi.getActiveTools().sort((a, b) => a.localeCompare(b))
+      : [];
 
   return {
     themeName,
@@ -375,6 +384,8 @@ function collectHeaderInfo(
     promptsCount: countUniqueSources(commands, 'prompt'),
     extensionsCount: extensions.length,
     commandsCount: commands.length,
+    tools: activeTools,
+    toolsCount: activeTools.length,
   };
 }
 

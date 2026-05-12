@@ -158,6 +158,7 @@ interface RenderHeaderOptions {
   cwd?: string;
   commands?: any[];
   themes?: any[];
+  activeTools?: string[];
   beforeAgentStartEvent?: any;
 }
 
@@ -178,6 +179,9 @@ function renderHeader(
     },
     getCommands() {
       return options.commands ?? [];
+    },
+    getActiveTools() {
+      return options.activeTools ?? [];
     },
     events: { on() {} },
   };
@@ -248,6 +252,7 @@ test('header hides diagnostic info when quietStartup is false by default', () =>
     const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
 
     assert.ok(!lines.includes('[Context]'));
+    assert.ok(!lines.includes('[Tools]'));
     assert.ok(!lines.includes('[Skills]'));
     assert.ok(!lines.includes('[Prompts]'));
     assert.ok(!lines.includes('[Extensions]'));
@@ -266,6 +271,7 @@ test('header hides diagnostic info for new sessions even when enabled', () => {
 
     assert.ok(lines.some((line) => line.includes('New Session Started')));
     assert.ok(!lines.includes('[Context]'));
+    assert.ok(!lines.includes('[Tools]'));
     assert.ok(!lines.includes('[Skills]'));
     assert.ok(!lines.includes('[Prompts]'));
     assert.ok(!lines.includes('[Extensions]'));
@@ -284,6 +290,8 @@ test('header shows diagnostic info when quietStartup is true', () => {
 
     assert.ok(lines.includes('[Context]'));
     assert.ok(lines.includes('  • AGENTS.md'));
+    assert.ok(lines.includes('[Tools]'));
+    assert.ok(lines.includes('  • none'));
     assert.equal(lines.at(-1), '');
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -300,6 +308,7 @@ test('header hides diagnostic info when quietStartup is false', () => {
 
     assert.ok(lines.some((line) => line.includes('Welcome')));
     assert.ok(!lines.includes('[Context]'));
+    assert.ok(!lines.includes('[Tools]'));
     assert.ok(!lines.includes('[Skills]'));
     assert.ok(!lines.includes('[Prompts]'));
     assert.ok(!lines.includes('[Extensions]'));
@@ -319,6 +328,7 @@ test('header shows diagnostic info for reload when enabled', () => {
     assert.ok(lines.some((line) => line.includes('Reloaded')));
     assert.ok(lines.includes('[Context]'));
     assert.ok(lines.includes('  • AGENTS.md'));
+    assert.ok(lines.includes('[Tools]'));
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
@@ -444,6 +454,49 @@ test('header extensions section falls back to path instead of local source label
     assert.ok(lines.includes('[Extensions]'));
     assert.ok(lines.includes('  • .pi/extensions/local-extension.ts'));
     assert.ok(!lines.includes('  • local'));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header tools section displays active tools sorted alphabetically', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  try {
+    enableHeaderInfo(cwd);
+    writeFileSync(join(cwd, 'AGENTS.md'), 'project context');
+
+    const activeTools = ['read', 'bash', 'edit', 'write'];
+    const lines = renderHeader('startup', 80, { cwd, activeTools }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Tools]'));
+    assert.ok(lines.includes('  • bash'));
+    assert.ok(lines.includes('  • edit'));
+    assert.ok(lines.includes('  • read'));
+    assert.ok(lines.includes('  • write'));
+
+    // verify sort order: bash < edit < read < write
+    const startIdx = lines.indexOf('[Tools]');
+    assert.ok(startIdx > 0);
+    const toolsSlice = lines.slice(startIdx + 1, startIdx + 5);
+    const sorted = ['  • bash', '  • edit', '  • read', '  • write'];
+    assert.deepEqual(toolsSlice, sorted);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header counts line includes tools count', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  try {
+    enableHeaderInfo(cwd);
+    writeFileSync(join(cwd, 'AGENTS.md'), 'project context');
+
+    const activeTools = ['bash', 'read', 'edit'];
+    const lines = renderHeader('startup', 80, { cwd, activeTools }).map(stripAnsi);
+
+    const countsLine = lines.find((line) => line.includes('tools:'));
+    assert.ok(countsLine, 'counts line should include tools: N');
+    assert.match(countsLine, /tools:\s*3/);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
