@@ -345,9 +345,9 @@ function resolveNpmRoot() {
   if (_npmRootResolved) return;
   _npmRootResolved = true;
   try {
-    // Use Node's built-in module resolution — no spawn needed
+    // Resolve pi-coding-agent itself — it's always in the global node_modules
     const req = createRequire(import.meta.url);
-    const pkgPath = req.resolve('pi-subagents/package.json');
+    const pkgPath = req.resolve('@earendil-works/pi-coding-agent/package.json');
     _npmRoot = dirname(dirname(pkgPath));
   } catch {
     // ignore
