@@ -4,7 +4,6 @@
  * Shows a gradient-colored PI logo.
  * Controlled by .pi/settings.json → header (boolean, default true).
  */
-import { createRequire } from 'node:module';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -335,24 +334,49 @@ function readPackageLabel(startPath: string): string | undefined {
 }
 
 function getNpmRoot(): string | undefined {
-  return _npmRoot;
+  if (_npmRootResolved) return _npmRoot;
+  _npmRootResolved = true;
+
+  const home = homedir();
+
+  // NVM: ~/.nvm/versions/node/<version>/lib/node_modules
+  if (process.env.NVM_DIR) {
+    const versionsDir = join(process.env.NVM_DIR, 'versions', 'node');
+    try {
+      if (existsSync(versionsDir)) {
+        for (const v of readdirSync(versionsDir).sort().reverse()) {
+          const dir = join(versionsDir, v, 'lib', 'node_modules');
+          if (existsSync(dir)) {
+            _npmRoot = dir;
+            return _npmRoot;
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Bun: ~/.bun/install/global/node_modules
+  const bunDir = join(home, '.bun', 'install', 'global', 'node_modules');
+  if (existsSync(bunDir)) {
+    _npmRoot = bunDir;
+    return _npmRoot;
+  }
+
+  // Fallbacks
+  for (const dir of ['/usr/local/lib/node_modules', '/usr/lib/node_modules']) {
+    if (existsSync(dir)) {
+      _npmRoot = dir;
+      return _npmRoot;
+    }
+  }
+
+  return undefined;
 }
 
 let _npmRoot: string | undefined;
 let _npmRootResolved = false;
-
-function resolveNpmRoot() {
-  if (_npmRootResolved) return;
-  _npmRootResolved = true;
-  try {
-    // Resolve pi-coding-agent itself — it's always in the global node_modules
-    const req = createRequire(import.meta.url);
-    const pkgPath = req.resolve('@earendil-works/pi-coding-agent/package.json');
-    _npmRoot = dirname(dirname(pkgPath));
-  } catch {
-    // ignore
-  }
-}
 
 // ── shared: read array field from settings.json ──
 
@@ -502,7 +526,6 @@ function collectHeaderInfo(
 
 /** Register the custom header extension. */
 export function registerHeader(pi: ExtensionAPI) {
-  resolveNpmRoot();
   let headerEnabled = false;
   let currentReason: SessionStartEvent['reason'] = 'startup';
   let liveTui: any = null;
