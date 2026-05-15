@@ -393,72 +393,6 @@ test('header skills section displays loaded skills from before_agent_start', () 
   }
 });
 
-test('header extensions section displays package name with parenthesized version', () => {
-  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
-  const extensionDir = join(cwd, 'extensions', 'demo');
-  try {
-    mkdirSync(extensionDir, { recursive: true });
-    enableHeaderInfo(cwd);
-    writeFileSync(
-      join(extensionDir, 'package.json'),
-      JSON.stringify({ name: 'demo-extension', version: '1.2.3' }),
-    );
-
-    const commands = [
-      {
-        name: 'demo',
-        source: 'extension',
-        sourceInfo: {
-          path: join(extensionDir, 'index.ts'),
-          source: 'local',
-          scope: 'project',
-          origin: 'top-level',
-          baseDir: extensionDir,
-        },
-      },
-    ];
-
-    const lines = renderHeader('startup', 80, { cwd, commands }).map(stripAnsi);
-
-    assert.ok(lines.includes('[Extensions]'));
-    assert.ok(lines.includes('  • demo-extension (v1.2.3)'));
-  } finally {
-    rmSync(cwd, { recursive: true, force: true });
-  }
-});
-
-test('header extensions section falls back to path instead of local source label', () => {
-  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
-  const extensionDir = join(cwd, '.pi', 'extensions');
-  const extensionPath = join(extensionDir, 'local-extension.ts');
-  try {
-    mkdirSync(extensionDir, { recursive: true });
-    enableHeaderInfo(cwd);
-    writeFileSync(extensionPath, 'export default function () {}');
-
-    const commands = [
-      {
-        name: 'local-command',
-        source: 'extension',
-        sourceInfo: {
-          path: extensionPath,
-          source: 'local',
-          scope: 'project',
-          origin: 'top-level',
-        },
-      },
-    ];
-
-    const lines = renderHeader('startup', 80, { cwd, commands }).map(stripAnsi);
-
-    assert.ok(lines.includes('[Extensions]'));
-    assert.ok(lines.includes('  • .pi/extensions/local-extension.ts'));
-    assert.ok(!lines.includes('  • local'));
-  } finally {
-    rmSync(cwd, { recursive: true, force: true });
-  }
-});
-
 test('header tools section displays active tools sorted alphabetically', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
   try {
@@ -497,6 +431,268 @@ test('header counts line includes tools count', () => {
     const countsLine = lines.find((line) => line.includes('tools:'));
     assert.ok(countsLine, 'counts line should include tools: N');
     assert.match(countsLine, /tools:\s*3/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+// ── packages section ──
+
+test('header packages section shows package name with version from local path', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const pkgDir = join(cwd, 'my-test-pkg');
+  try {
+    mkdirSync(pkgDir, { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: '@test/my-pkg', version: '2.0.0' }),
+    );
+    // write project settings with this package
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      packages: [pkgDir],
+    });
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Packages]'));
+    assert.ok(lines.some((l) => l.includes('@test/my-pkg (v2.0.0)')));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header packages section shows package name without version when missing', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const pkgDir = join(cwd, 'no-version-pkg');
+  try {
+    mkdirSync(pkgDir, { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: 'no-version-pkg' }));
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      packages: [pkgDir],
+    });
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Packages]'));
+    assert.ok(lines.some((l) => l.includes('  • no-version-pkg')));
+    assert.ok(!lines.some((l) => l.includes('no-version-pkg (v')));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header packages section deduplicates by source', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const pkgDir = join(cwd, 'dup-pkg');
+  try {
+    mkdirSync(pkgDir, { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: 'dup-pkg', version: '1.0.0' }),
+    );
+    // same package listed twice
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      packages: [pkgDir, pkgDir],
+    });
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    // should only appear once
+    const occurrences = lines.filter((l) => l.includes('dup-pkg (v1.0.0)')).length;
+    assert.equal(occurrences, 1);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header packages count appears in counts line', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const pkgDir = join(cwd, 'count-pkg');
+  try {
+    mkdirSync(pkgDir, { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: 'count-pkg', version: '1.0.0' }),
+    );
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      packages: [pkgDir],
+    });
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    const countsLine = lines.find((line) => line.includes('packages:'));
+    assert.ok(countsLine, 'counts line should include packages: N');
+    assert.match(countsLine, /packages:\s*\d+/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+// ── extensions section (scanned from settings.json extensions field) ──
+
+test('header extensions section lists .ts files from settings extensions dir', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const extDir = join(cwd, '.pi', 'extensions-test');
+  try {
+    mkdirSync(extDir, { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(join(extDir, 'alpha.ts'), 'export default function () {}');
+    writeFileSync(join(extDir, 'beta.ts'), 'export default function () {}');
+    writeFileSync(join(extDir, 'not-an-extension.md'), '# markdown');
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      extensions: [extDir],
+    });
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Extensions]'));
+    assert.ok(lines.some((l) => l.includes('.pi/extensions-test/alpha.ts')));
+    assert.ok(lines.some((l) => l.includes('.pi/extensions-test/beta.ts')));
+    // non-ts files excluded
+    assert.ok(!lines.some((l) => l.includes('not-an-extension')));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header extensions section shows single .ts file entry', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const extFile = join(cwd, 'custom-ext.ts');
+  try {
+    enableHeaderInfo(cwd);
+    writeFileSync(extFile, 'export default function () {}');
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      extensions: [extFile],
+    });
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Extensions]'));
+    assert.ok(lines.some((l) => l.includes('custom-ext.ts')));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header extensions section shows none when no extensions configured', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  try {
+    // Point home to a temp dir with no settings to isolate from global
+    const prevHome = process.env.HOME;
+    const fakeHome = mkdtempSync(join(tmpdir(), 'pi-powerline-header-home-'));
+    process.env.HOME = fakeHome;
+    try {
+      writeHeaderSettings(cwd, {
+        'header-info': true,
+        quietStartup: true,
+      });
+
+      const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+      assert.ok(lines.includes('[Extensions]'));
+      assert.ok(lines.some((l) => l.includes('  • none')));
+    } finally {
+      process.env.HOME = prevHome;
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+// ── counts line order ──
+
+test('header counts line has correct field order', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  try {
+    enableHeaderInfo(cwd);
+    writeFileSync(join(cwd, 'AGENTS.md'), 'project context');
+
+    const lines = renderHeader('startup', 120, { cwd }).map(stripAnsi);
+
+    const countsLine = lines.find(
+      (line) =>
+        line.includes('context:') &&
+        line.includes('packages:') &&
+        line.includes('tools:') &&
+        line.includes('skills:') &&
+        line.includes('prompts:') &&
+        line.includes('commands:') &&
+        line.includes('extensions:') &&
+        line.includes('themes:'),
+    );
+    assert.ok(countsLine, 'counts line should contain all fields');
+
+    // verify exact order
+    const idx = (s: string) => countsLine!.indexOf(s);
+    assert.ok(idx('context:') < idx('packages:'));
+    assert.ok(idx('packages:') < idx('tools:'));
+    assert.ok(idx('tools:') < idx('skills:'));
+    assert.ok(idx('skills:') < idx('prompts:'));
+    assert.ok(idx('prompts:') < idx('commands:'));
+    assert.ok(idx('commands:') < idx('extensions:'));
+    assert.ok(idx('extensions:') < idx('themes:'));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header sections follow consistent order', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const pkgDir = join(cwd, 'order-pkg');
+  const extDir = join(cwd, '.pi', 'order-ext');
+  try {
+    mkdirSync(pkgDir, { recursive: true });
+    mkdirSync(extDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: 'order-pkg', version: '1.0.0' }),
+    );
+    writeFileSync(join(extDir, 'order-ext.ts'), 'export default function () {}');
+    writeFileSync(join(cwd, 'AGENTS.md'), 'project context');
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      packages: [pkgDir],
+      extensions: [extDir],
+    });
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    // Extract section headers in order
+    const sections = lines.filter((l) => l.startsWith('[') && l.endsWith(']'));
+    const sectionNames = sections.map((l) => l.replace(/\[|\]/g, ''));
+
+    const idx = (s: string) => sectionNames.indexOf(s);
+    assert.ok(idx('Context') >= 0, 'should have Context section');
+    assert.ok(idx('Packages') >= 0, 'should have Packages section');
+    assert.ok(idx('Tools') >= 0, 'should have Tools section');
+    assert.ok(idx('Skills') >= 0, 'should have Skills section');
+    assert.ok(idx('Prompts') >= 0, 'should have Prompts section');
+    assert.ok(idx('Extensions') >= 0, 'should have Extensions section');
+
+    // verify order
+    assert.ok(idx('Context') < idx('Packages'));
+    assert.ok(idx('Packages') < idx('Tools'));
+    assert.ok(idx('Tools') < idx('Skills'));
+    assert.ok(idx('Skills') < idx('Prompts'));
+    assert.ok(idx('Prompts') < idx('Extensions'));
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

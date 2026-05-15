@@ -4,7 +4,8 @@
  * Shows a gradient-colored PI logo.
  * Controlled by .pi/settings.json → header (boolean, default true).
  */
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import type {
@@ -137,8 +138,10 @@ interface HeaderInfo {
   prompts: string[];
   skills: string[];
   extensions: string[];
+  packages: string[];
   contextItems: string[];
   contextCount: number;
+  packagesCount: number;
   themesCount: number;
   skillsCount: number;
   promptsCount: number;
@@ -192,12 +195,13 @@ function renderLogo(
 
   const counts = [
     `context: ${info.contextCount}`,
-    `themes: ${info.themesCount}`,
+    `packages: ${info.packagesCount}`,
+    `tools: ${info.toolsCount}`,
     `skills: ${info.skillsCount}`,
     `prompts: ${info.promptsCount}`,
-    `extensions: ${info.extensionsCount}`,
     `commands: ${info.commandsCount}`,
-    `tools: ${info.toolsCount}`,
+    `extensions: ${info.extensionsCount}`,
+    `themes: ${info.themesCount}`,
   ].join(' | ');
 
   return [
@@ -206,6 +210,8 @@ function renderLogo(
     ...centerWrappedLines(theme.fg('dim', counts), width),
     '',
     ...renderInfoSection(theme, 'Context', info.contextItems, width),
+    '',
+    ...renderInfoSection(theme, 'Packages', info.packages, width),
     '',
     ...renderInfoSection(theme, 'Tools', info.tools, width),
     '',
@@ -328,23 +334,125 @@ function readPackageLabel(startPath: string): string | undefined {
   return undefined;
 }
 
-function getExtensionItems(cwd: string, commands: SlashCommandInfo[]): string[] {
-  const extensions = new Map<string, string>();
+function getNpmRoot(): string | undefined {
+  return _npmRoot;
+}
 
-  for (const command of commands) {
-    if (command.source !== 'extension') continue;
+let _npmRoot: string | undefined;
+let _npmRootResolved = false;
 
-    const sourcePath = command.sourceInfo?.baseDir ?? command.sourceInfo?.path;
-    const key = sourcePath || command.sourceInfo?.source || command.name;
-    const label =
-      (sourcePath ? readPackageLabel(sourcePath) : undefined) ??
-      (sourcePath ? formatDisplayPath(cwd, sourcePath) : undefined) ??
-      command.sourceInfo?.source ??
-      command.name;
-    extensions.set(key, label);
+function resolveNpmRoot() {
+  if (_npmRootResolved) return;
+  _npmRootResolved = true;
+  try {
+    // Use Node's built-in module resolution — no spawn needed
+    const req = createRequire(import.meta.url);
+    const pkgPath = req.resolve('pi-subagents/package.json');
+    _npmRoot = dirname(dirname(pkgPath));
+  } catch {
+    // ignore
+  }
+}
+
+// ── shared: read array field from settings.json ──
+
+function readSettingsArray(path: string, key: string): string[] {
+  if (!existsSync(path)) return [];
+  try {
+    const json = JSON.parse(readFileSync(path, 'utf-8'));
+    return (json[key] ?? []).map(String);
+  } catch {
+    return [];
+  }
+}
+
+// ── shared: read raw package sources from settings.json ──
+
+function readPackageSources(cwd: string, home = homedir()): string[] {
+  const globalPkgs = readSettingsArray(join(home, '.pi', 'agent', 'settings.json'), 'packages');
+  const projectPkgs = readSettingsArray(join(cwd, '.pi', 'settings.json'), 'packages');
+
+  // dedupe: project wins over global
+  const seen = new Set<string>();
+  const all: string[] = [];
+  for (const pkg of [...projectPkgs, ...globalPkgs]) {
+    if (seen.has(pkg)) continue;
+    seen.add(pkg);
+    all.push(pkg);
+  }
+  return all;
+}
+
+// ── resolve a package source to its directory path ──
+
+function resolvePackageDir(source: string, cwd: string, home = homedir()): string | undefined {
+  if (source.startsWith('npm:')) {
+    const name = source.slice(4);
+    const npmRoot = getNpmRoot();
+    const candidates = [
+      join(home, '.pi', 'agent', 'node_modules', name),
+      ...(npmRoot ? [join(npmRoot, name)] : []),
+    ];
+    return candidates.find((d) => existsSync(d));
   }
 
-  return Array.from(extensions.values()).sort((a, b) => a.localeCompare(b));
+  return source.startsWith('~')
+    ? join(home, source.slice(source.startsWith('~/') ? 2 : 1))
+    : resolve(cwd, source);
+}
+
+// ── getPackages: name+version from each configured package ──
+
+function getPackages(cwd: string, home = homedir()): string[] {
+  const sources = readPackageSources(cwd, home);
+  const results: string[] = [];
+
+  for (const source of sources) {
+    const pkgDir = resolvePackageDir(source, cwd, home);
+    if (!pkgDir) {
+      // fallback: show npm package name or raw source
+      results.push(source.startsWith('npm:') ? source.slice(4) : source);
+      continue;
+    }
+    const label = readPackageLabel(pkgDir) ?? source;
+    results.push(label);
+  }
+
+  return results.sort((a, b) => a.localeCompare(b));
+}
+
+// ── getExtensionItems: scan .ts files from settings.json extensions dirs ──
+
+function getExtensionItems(cwd: string, home = homedir()): string[] {
+  const results: string[] = [];
+
+  const globalExts = readSettingsArray(join(home, '.pi', 'agent', 'settings.json'), 'extensions');
+  const projectExts = readSettingsArray(join(cwd, '.pi', 'settings.json'), 'extensions');
+
+  for (const ext of [...projectExts, ...globalExts]) {
+    const resolved = ext.startsWith('~')
+      ? join(home, ext.slice(ext.startsWith('~/') ? 2 : 1))
+      : resolve(cwd, ext);
+
+    if (!existsSync(resolved)) continue;
+
+    try {
+      const s = statSync(resolved);
+      if (s.isDirectory()) {
+        for (const f of readdirSync(resolved).sort()) {
+          if (f.endsWith('.ts')) {
+            results.push(formatDisplayPath(cwd, join(resolved, f)));
+          }
+        }
+      } else {
+        results.push(formatDisplayPath(cwd, resolved));
+      }
+    } catch {
+      // ignore unreadable paths
+    }
+  }
+
+  return results;
 }
 
 function shouldShowHeaderInfo(ctx: ExtensionContext, reason: SessionStartEvent['reason']): boolean {
@@ -364,7 +472,8 @@ function collectHeaderInfo(
   const commands = typeof pi.getCommands === 'function' ? pi.getCommands() : [];
   const allThemes = typeof ctx.ui.getAllThemes === 'function' ? ctx.ui.getAllThemes() : [];
   const themeName = theme.name ?? ctx.ui.theme?.name ?? 'current';
-  const extensions = getExtensionItems(ctx.cwd, commands);
+  const extensions = getExtensionItems(ctx.cwd);
+  const packages = getPackages(ctx.cwd);
   const activeTools =
     typeof pi.getActiveTools === 'function'
       ? pi.getActiveTools().sort((a, b) => a.localeCompare(b))
@@ -377,8 +486,10 @@ function collectHeaderInfo(
     prompts: getCommandNames(commands, 'prompt'),
     skills: skillItems,
     extensions,
+    packages,
     contextItems,
     contextCount: contextItems.length,
+    packagesCount: packages.length,
     themesCount: allThemes.length,
     skillsCount: skillItems.length,
     promptsCount: countUniqueSources(commands, 'prompt'),
@@ -391,6 +502,7 @@ function collectHeaderInfo(
 
 /** Register the custom header extension. */
 export function registerHeader(pi: ExtensionAPI) {
+  resolveNpmRoot();
   let headerEnabled = false;
   let currentReason: SessionStartEvent['reason'] = 'startup';
   let liveTui: any = null;
