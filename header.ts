@@ -52,6 +52,10 @@ function gradientLine(line: string): string {
 
 const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
 
+function getHomeDir(): string {
+  return process.env.HOME ?? homedir();
+}
+
 function visibleLength(line: string): number {
   return line.replace(ANSI_PATTERN, '').length;
 }
@@ -251,7 +255,7 @@ function formatRelativePath(cwd: string, filePath: string): string {
 }
 
 function formatDisplayPath(cwd: string, filePath: string): string {
-  const home = homedir();
+  const home = getHomeDir();
   const rel = relative(cwd, filePath);
   if (!rel || !rel.startsWith('..')) return rel || '.';
   if (filePath === home) return '~';
@@ -334,7 +338,7 @@ function getNpmRoot(): string | undefined {
   if (_npmRootResolved) return _npmRoot;
   _npmRootResolved = true;
 
-  const home = homedir();
+  const home = getHomeDir();
 
   // NVM: ~/.nvm/versions/node/<version>/lib/node_modules
   if (process.env.NVM_DIR) {
@@ -394,7 +398,12 @@ interface PackageSource {
   scope: 'project' | 'user';
 }
 
-function readPackageSources(cwd: string, home = homedir()): PackageSource[] {
+interface ExtensionSource {
+  source: string;
+  baseDir: string;
+}
+
+function readPackageSources(cwd: string, home = getHomeDir()): PackageSource[] {
   const globalPkgs = readSettingsArray(join(home, '.pi', 'agent', 'settings.json'), 'packages');
   const projectPkgs = readSettingsArray(join(cwd, '.pi', 'settings.json'), 'packages');
 
@@ -416,7 +425,7 @@ function readPackageSources(cwd: string, home = homedir()): PackageSource[] {
 
 // ── resolve a package source to its directory path ──
 
-function resolvePackageDir(source: string, cwd: string, home = homedir()): string | undefined {
+function resolvePackageDir(source: string, cwd: string, home = getHomeDir()): string | undefined {
   if (source.startsWith('npm:')) {
     const name = source.slice(4);
     const npmRoot = getNpmRoot();
@@ -441,7 +450,7 @@ function resolvePackageDir(source: string, cwd: string, home = homedir()): strin
 
 // ── getPackages: name+version from each configured package ──
 
-function getPackages(cwd: string, home = homedir()): string[] {
+function getPackages(cwd: string, home = getHomeDir()): string[] {
   const sources = readPackageSources(cwd, home);
   const results: string[] = [];
 
@@ -463,16 +472,37 @@ function getPackages(cwd: string, home = homedir()): string[] {
 
 // ── getExtensionItems: scan .ts files from settings.json extensions dirs ──
 
-function getExtensionItems(cwd: string, home = homedir()): string[] {
+function readExtensionSources(cwd: string, home = getHomeDir()): ExtensionSource[] {
+  const projectBaseDir = join(cwd, '.pi');
+  const globalBaseDir = join(home, '.pi', 'agent');
+  const projectExts = readSettingsArray(join(projectBaseDir, 'settings.json'), 'extensions');
+  const globalExts = readSettingsArray(join(globalBaseDir, 'settings.json'), 'extensions');
+
+  return [
+    ...projectExts.map((source) => ({ source, baseDir: projectBaseDir })),
+    ...globalExts.map((source) => ({ source, baseDir: globalBaseDir })),
+  ];
+}
+
+function resolveSettingsSource(source: string, baseDir: string, home = getHomeDir()): string {
+  return source.startsWith('~')
+    ? join(home, source.slice(source.startsWith('~/') ? 2 : 1))
+    : resolve(baseDir, source);
+}
+
+function getExtensionItems(cwd: string, home = getHomeDir()): string[] {
   const results: string[] = [];
+  const seenFiles = new Set<string>();
 
-  const globalExts = readSettingsArray(join(home, '.pi', 'agent', 'settings.json'), 'extensions');
-  const projectExts = readSettingsArray(join(cwd, '.pi', 'settings.json'), 'extensions');
+  function addFile(filePath: string) {
+    const key = resolve(filePath);
+    if (seenFiles.has(key)) return;
+    seenFiles.add(key);
+    results.push(formatDisplayPath(cwd, filePath));
+  }
 
-  for (const ext of [...projectExts, ...globalExts]) {
-    const resolved = ext.startsWith('~')
-      ? join(home, ext.slice(ext.startsWith('~/') ? 2 : 1))
-      : resolve(cwd, ext);
+  for (const { source, baseDir } of readExtensionSources(cwd, home)) {
+    const resolved = resolveSettingsSource(source, baseDir, home);
 
     if (!existsSync(resolved)) continue;
 
@@ -480,12 +510,10 @@ function getExtensionItems(cwd: string, home = homedir()): string[] {
       const s = statSync(resolved);
       if (s.isDirectory()) {
         for (const f of readdirSync(resolved).sort()) {
-          if (f.endsWith('.ts')) {
-            results.push(formatDisplayPath(cwd, join(resolved, f)));
-          }
+          if (f.endsWith('.ts')) addFile(join(resolved, f));
         }
       } else {
-        results.push(formatDisplayPath(cwd, resolved));
+        addFile(resolved);
       }
     } catch {
       // ignore unreadable paths

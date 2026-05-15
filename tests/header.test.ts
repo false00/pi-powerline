@@ -590,6 +590,38 @@ test('header extensions section shows single .ts file entry', () => {
   }
 });
 
+test('header extensions section dedupes duplicate project and global sources', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const fakeHome = mkdtempSync(join(tmpdir(), 'pi-powerline-header-home-'));
+  const extDir = join(cwd, '.pi', 'shared-ext');
+  const prevHome = process.env.HOME;
+  try {
+    process.env.HOME = fakeHome;
+    mkdirSync(extDir, { recursive: true });
+    mkdirSync(join(fakeHome, '.pi', 'agent'), { recursive: true });
+    writeFileSync(join(extDir, 'ghostty-split.ts'), 'export default function () {}');
+    writeFileSync(
+      join(fakeHome, '.pi', 'agent', 'settings.json'),
+      JSON.stringify({ extensions: [extDir] }),
+    );
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      extensions: [extDir],
+    });
+
+    const lines = renderHeader('startup', 120, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Extensions]'));
+    assert.equal(lines.filter((line) => line.includes('ghostty-split.ts')).length, 1);
+    assert.match(lines.find((line) => line.includes('extensions:')) ?? '', /extensions:\s*1/);
+  } finally {
+    process.env.HOME = prevHome;
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(fakeHome, { recursive: true, force: true });
+  }
+});
+
 test('header extensions section shows none when no extensions configured', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
   try {
