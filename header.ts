@@ -450,7 +450,7 @@ function getPackages(cwd: string, home = homedir()): string[] {
 
   for (const { source, scope } of sources) {
     const pkgDir = resolvePackageDir(source, cwd, home);
-    const scopeTag = scope === 'project' ? ' [project]' : ' [global]';
+    const scopeTag = scope === 'project' ? ' [l]' : ' [g]';
     if (!pkgDir) {
       // fallback: show npm package name or raw source
       const name = source.startsWith('npm:') ? source.slice(4) : source;
