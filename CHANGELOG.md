@@ -1,3 +1,10 @@
+## [0.6.1](https://github.com/jwu/pi-powerline/compare/v0.6.0...v0.6.1) (2026-05-15)
+
+
+### Bug Fixes
+
+* **header:** dedupe extension entries ([2b2db6e](https://github.com/jwu/pi-powerline/commit/2b2db6e4ed2973a50d145205a3884726591a2663))
+
 # [0.6.0](https://github.com/jwu/pi-powerline/compare/v0.5.1...v0.6.0) (2026-05-15)
 
 
