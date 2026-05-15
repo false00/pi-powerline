@@ -413,11 +413,17 @@ function resolvePackageDir(source: string, cwd: string, home = homedir()): strin
   if (source.startsWith('npm:')) {
     const name = source.slice(4);
     const npmRoot = getNpmRoot();
-    const candidates = [
-      join(home, '.pi', 'agent', 'node_modules', name),
-      ...(npmRoot ? [join(npmRoot, name)] : []),
-    ];
-    return candidates.find((d) => existsSync(d));
+    // project-scoped install (.pi/npm/node_modules/<name>)
+    const projectDir = join(cwd, '.pi', 'npm', 'node_modules', name);
+    if (existsSync(projectDir)) return projectDir;
+    // user-scoped install (~/.pi/agent/node_modules/<name>)
+    const userDir = join(home, '.pi', 'agent', 'node_modules', name);
+    if (existsSync(userDir)) return userDir;
+    // global npm root
+    if (npmRoot) {
+      const globalDir = join(npmRoot, name);
+      if (existsSync(globalDir)) return globalDir;
+    }
   }
 
   return source.startsWith('~')
