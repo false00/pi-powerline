@@ -424,6 +424,7 @@ function resolvePackageDir(source: string, cwd: string, home = homedir()): strin
       const globalDir = join(npmRoot, name);
       if (existsSync(globalDir)) return globalDir;
     }
+    return undefined;
   }
 
   return source.startsWith('~')

@@ -697,3 +697,85 @@ test('header sections follow consistent order', () => {
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+// ── npm package resolution ──
+
+test('header packages resolves npm package from project-local .pi/npm', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const npmDir = join(cwd, '.pi', 'npm', 'node_modules', 'pi-local-pkg');
+  try {
+    mkdirSync(npmDir, { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(
+      join(npmDir, 'package.json'),
+      JSON.stringify({ name: 'pi-local-pkg', version: '3.1.0' }),
+    );
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      packages: ['npm:pi-local-pkg'],
+    });
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Packages]'));
+    assert.ok(lines.some((l) => l.includes('pi-local-pkg (v3.1.0)')));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header packages shows npm package name without version when not installed', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  try {
+    const prevHome = process.env.HOME;
+    const fakeHome = mkdtempSync(join(tmpdir(), 'pi-powerline-fake-home-'));
+    process.env.HOME = fakeHome;
+    try {
+      enableHeaderInfo(cwd);
+      writeHeaderSettings(cwd, {
+        'header-info': true,
+        quietStartup: true,
+        packages: ['npm:missing-pkg'],
+      });
+
+      const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+      assert.ok(lines.includes('[Packages]'));
+      assert.ok(lines.some((l) => l.includes('  • missing-pkg')));
+      assert.ok(!lines.some((l) => l.includes('missing-pkg (v')));
+    } finally {
+      process.env.HOME = prevHome;
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+// ── extensions: non-ts exclusion ──
+
+test('header extensions excludes non-ts files from directory scan', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const extDir = join(cwd, '.pi', 'mixed-ext');
+  try {
+    mkdirSync(extDir, { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(join(extDir, 'good.ts'), 'export default function () {}');
+    writeFileSync(join(extDir, 'readme.md'), '# docs');
+    writeFileSync(join(extDir, 'config.json'), '{}');
+    writeHeaderSettings(cwd, {
+      'header-info': true,
+      quietStartup: true,
+      extensions: [extDir],
+    });
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.some((l) => l.includes('good.ts')));
+    assert.ok(!lines.some((l) => l.includes('readme.md')));
+    assert.ok(!lines.some((l) => l.includes('config.json')));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
