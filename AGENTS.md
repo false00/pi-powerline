@@ -1,4 +1,4 @@
-这是一个 pi 插件项目，提供三个 powerline 风格的 UI 扩展：编辑器、底部栏、页头。
+这是一个 pi 插件项目，提供 powerline 风格的 UI 扩展：编辑器、面包屑、底部栏、页头。
 
 ## 项目结构
 
@@ -6,15 +6,19 @@
 .
 ├── AGENTS.md               # 项目协作规则（本文件）
 ├── README.md               # 安装、使用、开发说明
-├── package.json            # npm 包声明，"pi" 字段指向 index.ts 入口
-├── index.ts                # 唯一入口，汇总注册三个扩展
-├── editor.ts               # 编辑器扩展（PromptPrefixEditor）
-├── footer.ts               # 底部栏扩展（token 统计 + git 分支）
-├── header.ts               # 页头扩展（渐变色 PI logo）
-├── tests/
-│   ├── editor.test.ts
-│   ├── footer.test.ts
-│   └── header.test.ts
+├── CHANGELOG.md            # 发布变更记录
+├── LICENSE                 # MIT 许可证
+├── package.json            # npm 包声明，"pi" 字段指向 extensions 目录
+├── assets/                 # README 与包 gallery 图片资源
+├── extensions/             # pi 标准扩展目录
+│   ├── index.ts            # 唯一入口，汇总注册所有扩展
+│   ├── editor.ts           # 编辑器扩展（PromptPrefixEditor）
+│   ├── breadcrumb.ts       # 面包屑渲染辅助
+│   ├── widget.ts           # 顶部面包屑 widget
+│   ├── footer.ts           # 底部栏扩展（token 统计 + git 分支）
+│   ├── header.ts           # 页头扩展（渐变色 PI logo）
+│   └── settings.ts         # 设置读取与写入
+├── tests/                  # 单元测试
 ├── .pi/
 │   ├── settings.json       # pi 项目级配置
 │   ├── APPEND_SYSTEM.md    # 追加到 system prompt 的内容
@@ -26,9 +30,9 @@
 
 ## 架构说明
 
-- `index.ts` 是 pi 包唯一入口，`package.json` 中 `"pi": { "extensions": ["./index.ts"] }` 声明
-- 每个扩展模块导出 `registerXxx(pi)` 函数，由 index.ts 统一调用
-- 辅助函数内联在各模块中，不单独拆文件
+- `extensions/index.ts` 是 pi 包唯一入口，`package.json` 中 `"pi": { "extensions": ["./extensions"] }` 声明
+- 每个扩展模块导出 `registerXxx(pi)` 函数，由 `extensions/index.ts` 统一调用
+- 辅助函数内联在各模块中；共享的 UI/设置辅助放在 `extensions/breadcrumb.ts` 与 `extensions/settings.ts`
 
 ## 工具链
 

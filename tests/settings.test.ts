@@ -2,7 +2,7 @@ import test, { afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { readPowerlineSettings, readSettings } from '../settings.ts';
+import { readPowerlineSettings, readSettings } from '../extensions/settings.ts';
 
 // ── helpers ──
 

@@ -7,15 +7,17 @@
     "type": "git",
     "url": "git+https://github.com/jwu/pi-powerline.git"
   },
+  "bugs": {
+    "url": "https://github.com/jwu/pi-powerline/issues"
+  },
   "type": "module",
   "files": [
-    "index.ts",
-    "editor.ts",
-    "breadcrumb.ts",
-    "widget.ts",
-    "footer.ts",
-    "header.ts",
-    "settings.ts"
+    "extensions/",
+    "README.md",
+    "package.json",
+    "CHANGELOG.md",
+    "LICENSE",
+    "assets/"
   ],
   "keywords": [
     "pi-package",
@@ -24,11 +26,12 @@
     "powerline",
     "extension"
   ],
-  "author": "",
+  "author": "jwu",
   "license": "MIT",
   "scripts": {
     "test": "bun test",
     "typecheck": "bun tsc --noEmit --ignoreDeprecations 6.0",
+    "lint": "bun run format:check && bun run typecheck",
     "format": "prettier --write '**/*.ts'",
     "format:check": "prettier --check '**/*.ts'",
     "prepare": "[ -d .git ] && simple-git-hooks || true",
@@ -70,9 +73,12 @@
     "pre-commit": "bun prettier --check '**/*.ts' && bun test",
     "commit-msg": "bun commitlint --edit \"$1\""
   },
+  "engines": {
+    "node": ">=20"
+  },
   "pi": {
     "extensions": [
-      "./index.ts"
+      "./extensions"
     ],
     "image": "https://raw.githubusercontent.com/jwu/pi-powerline/refs/heads/main/assets/pi-powerline.png"
   },

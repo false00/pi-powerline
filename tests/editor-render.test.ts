@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PromptPrefixEditor, updateTheme } from '../editor.ts';
+import { PromptPrefixEditor, updateTheme } from '../extensions/editor.ts';
 
 // ── helpers ──
 

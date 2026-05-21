@@ -7,7 +7,7 @@ import {
   renderBreadcrumbInfo,
   SEP,
   withIcon,
-} from '../breadcrumb.ts';
+} from '../extensions/breadcrumb.ts';
 
 // ═══════════════════════════════════════════════════
 // withIcon
