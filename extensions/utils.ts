@@ -3,7 +3,6 @@
  *
  * Rendering and font-detection helpers used by breadcrumb, footer, and other extensions.
  */
-import { readdirSync } from 'node:fs';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // nerd font detection (cached)
@@ -14,31 +13,16 @@ let _nerdCache: boolean | null = null;
 export function hasNerdFonts(): boolean {
   if (_nerdCache !== null) return _nerdCache;
 
-  if (process.env.POWERLINE_NERD_FONTS === '1') return (_nerdCache = true);
-  if (process.env.POWERLINE_NERD_FONTS === '0') return (_nerdCache = false);
+  if (process.env.PI_NERD_FONTS === '1') return (_nerdCache = true);
+  if (process.env.PI_NERD_FONTS === '0') return (_nerdCache = false);
   if (process.env.GHOSTTY_RESOURCES_DIR) return (_nerdCache = true);
 
-  // Windows: scan system and user font directories for Nerd Font files
-  if (process.platform === 'win32') {
-    const fontDirs = [
-      'C:\\Windows\\Fonts',
-      `${process.env.LOCALAPPDATA}\\Microsoft\\Windows\\Fonts`,
-    ].filter((d) => d);
-    for (const dir of fontDirs) {
-      try {
-        const files = readdirSync(dir);
-        if (files.some((f) => /nerd/i.test(f))) return (_nerdCache = true);
-      } catch {
-        // dir not accessible, skip
-      }
-    }
-    return (_nerdCache = false);
+  const terminal = `${process.env.TERM_PROGRAM || ''} ${process.env.TERM || ''}`.toLowerCase();
+  if (['iterm', 'wezterm', 'kitty', 'ghostty', 'alacritty'].some((t) => terminal.includes(t))) {
+    return (_nerdCache = true);
   }
 
-  const term = (process.env.TERM_PROGRAM || '').toLowerCase();
-  return (_nerdCache = ['iterm', 'wezterm', 'kitty', 'ghostty', 'alacritty'].some((t) =>
-    term.includes(t),
-  ));
+  return (_nerdCache = false);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
