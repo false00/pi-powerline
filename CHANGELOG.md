@@ -1,3 +1,10 @@
+## [0.6.2](https://github.com/jwu/pi-powerline/compare/v0.6.1...v0.6.2) (2026-05-22)
+
+
+### Bug Fixes
+
+* simplify nerd font detection ([52dacaf](https://github.com/jwu/pi-powerline/commit/52dacaf693161456a8acfcc0da5a6abc98330ffc))
+
 ## [0.6.1](https://github.com/jwu/pi-powerline/compare/v0.6.0...v0.6.1) (2026-05-15)
 
 
