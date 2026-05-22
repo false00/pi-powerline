@@ -40,6 +40,24 @@ Settings are read from both global and project files. Project settings override 
 | `header` | `true` / `false` | `true` | Enable custom gradient-logo header |
 | `header-info` | `true` / `false` | `true` | Show header diagnostic info on startup/reload |
 
+### Nerd Font icons
+
+pi-powerline uses Nerd Font icons when it can infer that the terminal supports them.
+
+Detection order:
+
+1. `PI_NERD_FONTS=1` forces icons on
+2. `PI_NERD_FONTS=0` forces icons off
+3. `GHOSTTY_RESOURCES_DIR` enables icons for Ghostty
+4. `TERM_PROGRAM` or `TERM` containing `iterm`, `wezterm`, `kitty`, `ghostty`, or `alacritty` enables icons
+5. Otherwise icons are disabled and plain text fallbacks are used
+
+For SSH or terminals that cannot be detected reliably, set it explicitly:
+
+```bash
+export PI_NERD_FONTS=1
+```
+
 ### Header info
 
 `header-info` adds diagnostic sections under the header:
