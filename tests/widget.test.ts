@@ -1,13 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  hexFg,
-  ICON_FOLDER,
-  ICON_MODEL,
-  renderBreadcrumbInfo,
-  SEP,
-  withIcon,
-} from '../extensions/breadcrumb.ts';
+import { hasNerdFonts, hexFg, withIcon } from '../extensions/utils.ts';
+import { ICON_FOLDER, ICON_MODEL, renderBreadcrumbInfo, SEP } from '../extensions/breadcrumb.ts';
 
 // ═══════════════════════════════════════════════════
 // withIcon

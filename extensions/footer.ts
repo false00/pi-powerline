@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import { hasNerdFonts, hexFg, withIcon } from './breadcrumb.ts';
+import { hasNerdFonts, hexFg, withIcon } from './utils.ts';
 import { readPowerlineSettings } from './settings.ts';
 
 // ═══════════════════════════════════════════════════════════════════════════
