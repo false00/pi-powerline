@@ -590,6 +590,59 @@ test('header extensions section shows single .ts file entry', () => {
   }
 });
 
+test('header extensions section lists project auto-discovered extensions', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const fakeHome = mkdtempSync(join(tmpdir(), 'pi-powerline-header-home-'));
+  const prevHome = process.env.HOME;
+  try {
+    process.env.HOME = fakeHome;
+    const extDir = join(cwd, '.pi', 'extensions');
+    mkdirSync(join(extDir, 'nested-ext'), { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(join(extDir, 'tps.ts'), 'export default function () {}');
+    writeFileSync(join(extDir, 'plain.js'), 'export default function () {}');
+    writeFileSync(join(extDir, 'ignored.md'), '# docs');
+    writeFileSync(join(extDir, 'nested-ext', 'index.ts'), 'export default function () {}');
+
+    const lines = renderHeader('startup', 120, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Extensions]'));
+    assert.ok(lines.some((l) => l.includes('.pi/extensions/tps.ts')));
+    assert.ok(lines.some((l) => l.includes('.pi/extensions/plain.js')));
+    assert.ok(lines.some((l) => l.includes('.pi/extensions/nested-ext/index.ts')));
+    assert.ok(!lines.some((l) => l.includes('ignored.md')));
+    assert.match(lines.find((line) => line.includes('extensions:')) ?? '', /extensions:\s*3/);
+  } finally {
+    process.env.HOME = prevHome;
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(fakeHome, { recursive: true, force: true });
+  }
+});
+
+test('header extensions section lists global auto-discovered extensions', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const fakeHome = mkdtempSync(join(tmpdir(), 'pi-powerline-header-home-'));
+  const prevHome = process.env.HOME;
+  try {
+    process.env.HOME = fakeHome;
+    const extDir = join(fakeHome, '.pi', 'agent', 'extensions');
+    mkdirSync(join(extDir, 'global-nested'), { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(join(extDir, 'global.ts'), 'export default function () {}');
+    writeFileSync(join(extDir, 'global-nested', 'index.js'), 'export default function () {}');
+
+    const lines = renderHeader('startup', 120, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Extensions]'));
+    assert.ok(lines.some((l) => l.includes('~/.pi/agent/extensions/global.ts')));
+    assert.ok(lines.some((l) => l.includes('~/.pi/agent/extensions/global-nested/index.js')));
+  } finally {
+    process.env.HOME = prevHome;
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(fakeHome, { recursive: true, force: true });
+  }
+});
+
 test('header extensions section dedupes duplicate project and global sources', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
   const fakeHome = mkdtempSync(join(tmpdir(), 'pi-powerline-header-home-'));

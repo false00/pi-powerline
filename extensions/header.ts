@@ -470,7 +470,7 @@ function getPackages(cwd: string, home = getHomeDir()): string[] {
   return results.sort((a, b) => a.localeCompare(b));
 }
 
-// ── getExtensionItems: scan .ts files from settings.json extensions dirs ──
+// ── getExtensionItems: scan configured and auto-discovered extension paths ──
 
 function readExtensionSources(cwd: string, home = getHomeDir()): ExtensionSource[] {
   const projectBaseDir = join(cwd, '.pi');
@@ -490,37 +490,59 @@ function resolveSettingsSource(source: string, baseDir: string, home = getHomeDi
     : resolve(baseDir, source);
 }
 
+const EXTENSION_INDEX_FILES = ['index.ts', 'index.js'];
+
+function isExtensionFile(filePath: string): boolean {
+  return filePath.endsWith('.ts') || filePath.endsWith('.js');
+}
+
+function safeStat(path: string) {
+  try {
+    return statSync(path);
+  } catch {
+    return undefined;
+  }
+}
+
+function listExtensionFiles(path: string): string[] {
+  const s = safeStat(path);
+  if (!s) return [];
+  if (s.isFile()) return isExtensionFile(path) ? [path] : [];
+  if (!s.isDirectory()) return [];
+
+  return readdirSync(path)
+    .sort()
+    .flatMap((entry) => {
+      const entryPath = join(path, entry);
+      const entryStat = safeStat(entryPath);
+      if (entryStat?.isFile() && isExtensionFile(entry)) return [entryPath];
+      if (!entryStat?.isDirectory()) return [];
+
+      return EXTENSION_INDEX_FILES.map((file) => join(entryPath, file)).filter((indexPath) =>
+        safeStat(indexPath)?.isFile(),
+      );
+    });
+}
+
 function getExtensionItems(cwd: string, home = getHomeDir()): string[] {
-  const results: string[] = [];
-  const seenFiles = new Set<string>();
+  const sources = [
+    ...readExtensionSources(cwd, home).map(({ source, baseDir }) =>
+      resolveSettingsSource(source, baseDir, home),
+    ),
+    join(cwd, '.pi', 'extensions'),
+    join(home, '.pi', 'agent', 'extensions'),
+  ];
+  const seen = new Set<string>();
 
-  function addFile(filePath: string) {
-    const key = resolve(filePath);
-    if (seenFiles.has(key)) return;
-    seenFiles.add(key);
-    results.push(formatDisplayPath(cwd, filePath));
-  }
-
-  for (const { source, baseDir } of readExtensionSources(cwd, home)) {
-    const resolved = resolveSettingsSource(source, baseDir, home);
-
-    if (!existsSync(resolved)) continue;
-
-    try {
-      const s = statSync(resolved);
-      if (s.isDirectory()) {
-        for (const f of readdirSync(resolved).sort()) {
-          if (f.endsWith('.ts')) addFile(join(resolved, f));
-        }
-      } else {
-        addFile(resolved);
-      }
-    } catch {
-      // ignore unreadable paths
-    }
-  }
-
-  return results;
+  return sources
+    .flatMap(listExtensionFiles)
+    .filter((filePath) => {
+      const key = resolve(filePath);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((filePath) => formatDisplayPath(cwd, filePath));
 }
 
 function shouldShowHeaderInfo(ctx: ExtensionContext, reason: SessionStartEvent['reason']): boolean {
