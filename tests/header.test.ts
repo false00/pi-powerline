@@ -458,9 +458,39 @@ test('header packages section shows package name with version from local path', 
     const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
 
     assert.ok(lines.includes('[Packages]'));
-    assert.ok(lines.some((l) => l.includes('@test/my-pkg (v2.0.0) [l]')));
+    assert.ok(lines.some((l) => l.includes('@test/my-pkg (v2.0.0) [lp]')));
   } finally {
     rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('header packages section marks global path packages with gp', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pi-powerline-header-'));
+  const fakeHome = mkdtempSync(join(tmpdir(), 'pi-powerline-header-home-'));
+  const pkgDir = join(fakeHome, 'global-path-pkg');
+  const prevHome = process.env.HOME;
+  try {
+    process.env.HOME = fakeHome;
+    mkdirSync(pkgDir, { recursive: true });
+    mkdirSync(join(fakeHome, '.pi', 'agent'), { recursive: true });
+    enableHeaderInfo(cwd);
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: 'global-path-pkg', version: '2.5.0' }),
+    );
+    writeFileSync(
+      join(fakeHome, '.pi', 'agent', 'settings.json'),
+      JSON.stringify({ packages: [pkgDir] }),
+    );
+
+    const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
+
+    assert.ok(lines.includes('[Packages]'));
+    assert.ok(lines.some((l) => l.includes('global-path-pkg (v2.5.0) [gp]')));
+  } finally {
+    process.env.HOME = prevHome;
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(fakeHome, { recursive: true, force: true });
   }
 });
 
@@ -480,7 +510,7 @@ test('header packages section shows package name without version when missing', 
     const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
 
     assert.ok(lines.includes('[Packages]'));
-    assert.ok(lines.some((l) => l.includes('  • no-version-pkg [l]')));
+    assert.ok(lines.some((l) => l.includes('  • no-version-pkg [lp]')));
     assert.ok(!lines.some((l) => l.includes('no-version-pkg (v')));
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -507,7 +537,7 @@ test('header packages section deduplicates by source', () => {
     const lines = renderHeader('startup', 80, { cwd }).map(stripAnsi);
 
     // should only appear once
-    const occurrences = lines.filter((l) => l.includes('dup-pkg (v1.0.0) [l]')).length;
+    const occurrences = lines.filter((l) => l.includes('dup-pkg (v1.0.0) [lp]')).length;
     assert.equal(occurrences, 1);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
