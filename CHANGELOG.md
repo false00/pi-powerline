@@ -1,3 +1,10 @@
+## [0.6.3](https://github.com/jwu/pi-powerline/compare/v0.6.2...v0.6.3) (2026-05-24)
+
+
+### Bug Fixes
+
+* show auto-discovered extensions in header ([e2b187f](https://github.com/jwu/pi-powerline/commit/e2b187fdcf840c741be3be3bf8ad4c95612e9fc2))
+
 ## [0.6.2](https://github.com/jwu/pi-powerline/compare/v0.6.1...v0.6.2) (2026-05-22)
 
 
