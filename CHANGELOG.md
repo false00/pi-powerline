@@ -1,3 +1,15 @@
+# [0.7.0](https://github.com/jwu/pi-powerline/compare/v0.6.3...v0.7.0) (2026-05-24)
+
+
+### Bug Fixes
+
+* **auto-format:** update pi import package ([3d67f66](https://github.com/jwu/pi-powerline/commit/3d67f6650be48de18b90f8c4582609f691e60cd3))
+
+
+### Features
+
+* **header:** tag path packages distinctly ([471c409](https://github.com/jwu/pi-powerline/commit/471c409457de296ff94a96812e9706938981e5aa))
+
 ## [0.6.3](https://github.com/jwu/pi-powerline/compare/v0.6.2...v0.6.3) (2026-05-24)
 
 
