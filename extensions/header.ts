@@ -432,8 +432,8 @@ function resolvePackageDir(source: string, cwd: string, home = getHomeDir()): st
     // project-scoped install (.pi/npm/node_modules/<name>)
     const projectDir = join(cwd, '.pi', 'npm', 'node_modules', name);
     if (existsSync(projectDir)) return projectDir;
-    // user-scoped install (~/.pi/agent/node_modules/<name>)
-    const userDir = join(home, '.pi', 'agent', 'node_modules', name);
+    // user-scoped install (~/.pi/agent/npm/node_modules/<name>)
+    const userDir = join(home, '.pi', 'agent', 'npm', 'node_modules', name);
     if (existsSync(userDir)) return userDir;
     // global npm root
     if (npmRoot) {
