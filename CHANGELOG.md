@@ -1,3 +1,10 @@
+## [0.7.1](https://github.com/jwu/pi-powerline/compare/v0.7.0...v0.7.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **header:** resolve user-scoped npm package dir with npm/ prefix ([5e5bb18](https://github.com/jwu/pi-powerline/commit/5e5bb189602e68488d57cc211a806f6c5a6d6a1b))
+
 # [0.7.0](https://github.com/jwu/pi-powerline/compare/v0.6.3...v0.7.0) (2026-05-24)
 
 
