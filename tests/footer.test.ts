@@ -10,6 +10,32 @@ function formatTokens(n: number): string {
   return `${Math.round(n / 1000000)}M`;
 }
 
+interface UsageLike {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+function getCacheHitRate(usage: UsageLike): number | undefined {
+  const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
+  return promptTokens > 0 ? (usage.cacheRead / promptTokens) * 100 : undefined;
+}
+
+function buildStatsParts(usage: UsageLike, cost = 0): string[] {
+  const parts: string[] = [];
+  if (usage.input) parts.push(`↑${formatTokens(usage.input)}`);
+  if (usage.output) parts.push(`↓${formatTokens(usage.output)}`);
+  if (usage.cacheRead) parts.push(`R${formatTokens(usage.cacheRead)}`);
+  if (usage.cacheWrite) parts.push(`W${formatTokens(usage.cacheWrite)}`);
+  const cacheHitRate = getCacheHitRate(usage);
+  if ((usage.cacheRead > 0 || usage.cacheWrite > 0) && cacheHitRate !== undefined) {
+    parts.push(`CH${cacheHitRate.toFixed(1)}%`);
+  }
+  if (cost) parts.push(`$${cost.toFixed(3)}`);
+  return parts;
+}
+
 // ── formatTokens ──
 
 test('formatTokens: < 1000 returns exact number', () => {
@@ -65,4 +91,24 @@ test('formatTokens: output format for each tier', () => {
   assert.match(formatTokens(5000000), /^\d+\.\dM$/);
   // >= 10M: digit(s)M
   assert.match(formatTokens(50000000), /^\d+M$/);
+});
+
+// ── cache hit rate ──
+
+test('getCacheHitRate uses cacheRead over prompt tokens only', () => {
+  assert.equal(
+    getCacheHitRate({ input: 10000, output: 800, cacheRead: 30000, cacheWrite: 5000 }),
+    (30000 / 45000) * 100,
+  );
+});
+
+test('getCacheHitRate returns undefined when prompt token total is zero', () => {
+  assert.equal(getCacheHitRate({ input: 0, output: 100, cacheRead: 0, cacheWrite: 0 }), undefined);
+});
+
+test('stats parts place CH after R/W and before cost', () => {
+  assert.deepEqual(
+    buildStatsParts({ input: 10000, output: 800, cacheRead: 30000, cacheWrite: 5000 }, 0.012),
+    ['↑10k', '↓800', 'R30k', 'W5.0k', 'CH66.7%', '$0.012'],
+  );
 });

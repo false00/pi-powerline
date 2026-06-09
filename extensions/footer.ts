@@ -90,6 +90,11 @@ function getUsageTokenTotal(usage: SessionAssistantUsage): number {
   );
 }
 
+function getCacheHitRate(usage: SessionAssistantUsage): number | undefined {
+  const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
+  return promptTokens > 0 ? (usage.cacheRead / promptTokens) * 100 : undefined;
+}
+
 function isSessionAssistantMessage(value: unknown): value is AssistantMessage {
   return (
     typeof value === 'object' &&
@@ -209,6 +214,10 @@ function createFooterRenderer(ctx: ExtensionContext) {
         if (totalOutput) statsParts.push(`↓${formatTokens(totalOutput)}`);
         if (totalCacheRead) statsParts.push(`R${formatTokens(totalCacheRead)}`);
         if (totalCacheWrite) statsParts.push(`W${formatTokens(totalCacheWrite)}`);
+        const latestCacheHitRate = latestUsage ? getCacheHitRate(latestUsage) : undefined;
+        if ((totalCacheRead > 0 || totalCacheWrite > 0) && latestCacheHitRate !== undefined) {
+          statsParts.push(`CH${latestCacheHitRate.toFixed(1)}%`);
+        }
 
         const usingSubscription = ctx.model ? ctx.modelRegistry.isUsingOAuth(ctx.model) : false;
         if (totalCost || usingSubscription) {
