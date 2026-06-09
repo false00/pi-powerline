@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/jwu/pi-powerline/compare/v0.7.1...v0.8.0) (2026-06-09)
+
+
+### Features
+
+* **footer:** show cache hit rate ([e2c5535](https://github.com/jwu/pi-powerline/commit/e2c5535577792432e7007d504cfb1f9a37d86562))
+
 ## [0.7.1](https://github.com/jwu/pi-powerline/compare/v0.7.0...v0.7.1) (2026-05-27)
 
 
