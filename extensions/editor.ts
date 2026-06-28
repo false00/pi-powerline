@@ -76,16 +76,34 @@ export interface PromptPrefixColorTokens {
 
 /** Custom editor with a ❯ prompt prefix. Colors use `PromptPrefixColorTokens`. */
 export class PromptPrefixEditor extends CustomEditor {
+  private readonly tuiRef: any;
+
   static colorTokens: PromptPrefixColorTokens = {
     border: 'borderAccent',
     prefix: 'dim',
     indent: 'border',
   };
 
+  constructor(tui: any, theme: EditorTheme, keybindings: any) {
+    super(tui, theme, keybindings);
+    this.tuiRef = tui;
+  }
+
   render(width: number): string[] {
-    const contentWidth = Math.max(1, width - 2);
+    const terminalColumns = Number(this.tuiRef?.terminal?.columns);
+    const renderWidth = Math.max(
+      1,
+      Math.floor(
+        Number.isFinite(terminalColumns) && terminalColumns > 0
+          ? Math.min(width, terminalColumns)
+          : width,
+      ),
+    );
+    const contentWidth = Math.max(1, renderWidth - 2);
     const lines = super.render(contentWidth);
-    if (lines.length < 3) return lines;
+    if (lines.length < 3) {
+      return lines.map((line) => truncateToWidth(line, renderWidth, ''));
+    }
 
     const theme = currentTheme;
     const color = (token: ThemeColor | undefined, text: string) =>
@@ -103,7 +121,7 @@ export class PromptPrefixEditor extends CustomEditor {
 
     const result = renderPromptPrefix(
       lines,
-      width,
+      renderWidth,
       color(tokens.border, '─'),
       color(tokens.prefix, '❯'),
       tokens.indent ? color(tokens.indent, ' ') : ' ',
@@ -118,16 +136,16 @@ export class PromptPrefixEditor extends CustomEditor {
 
         const infoWidth = visibleWidth(infoPart);
         // '─ ' (2) + info + ' ' (1) + dashes → total width
-        let paddingLen = width - 3 - infoWidth;
+        let paddingLen = renderWidth - 3 - infoWidth;
         let displayInfo = infoPart;
 
         if (paddingLen < 2) {
           // info too wide or not enough dashes, truncate with ellipsis, keep at least 2 dashes
           const minDashes = 2;
-          const availForInfo = width - 3 - minDashes;
+          const availForInfo = renderWidth - 3 - minDashes;
           if (availForInfo > 0) {
             displayInfo = truncateToWidth(infoPart, availForInfo, '...');
-            paddingLen = width - 3 - visibleWidth(displayInfo);
+            paddingLen = renderWidth - 3 - visibleWidth(displayInfo);
           }
         }
 
@@ -139,7 +157,7 @@ export class PromptPrefixEditor extends CustomEditor {
       }
     }
 
-    return result;
+    return result.map((line) => truncateToWidth(line, renderWidth, ''));
   }
 }
 

@@ -9,10 +9,10 @@ function visibleWidth(str: string): number {
   return str.replace(/\x1b\[[0-9;]*m/g, '').length;
 }
 
-function mockTUI() {
+function mockTUI(columns?: number) {
   return {
     requestRender: () => {},
-    terminal: { rows: 100 },
+    terminal: { rows: 100, columns },
   } as any;
 }
 
@@ -27,8 +27,8 @@ function mockKeybindings() {
   return { matches: () => false } as any;
 }
 
-function makeEditor(): PromptPrefixEditor {
-  return new PromptPrefixEditor(mockTUI(), mockEditorTheme(), mockKeybindings());
+function makeEditor(columns?: number): PromptPrefixEditor {
+  return new PromptPrefixEditor(mockTUI(columns), mockEditorTheme(), mockKeybindings());
 }
 
 /** Set the module-level currentTheme used by PromptPrefixEditor.render. */
@@ -118,6 +118,18 @@ test('minimum width (3) renders correctly', () => {
   assert.ok(lines.length >= 3);
   for (const line of lines) {
     assert.equal(visibleWidth(line), 3);
+  }
+});
+
+test('terminal columns cap prevents over-wide lines after resize', () => {
+  setPlainTheme();
+  const editor = makeEditor(27);
+  editor.setText('hello world');
+  const lines = editor.render(45);
+
+  assert.ok(lines.length >= 3);
+  for (const line of lines) {
+    assert.ok(visibleWidth(line) <= 27, `line visible width ${visibleWidth(line)} > 27`);
   }
 });
 
