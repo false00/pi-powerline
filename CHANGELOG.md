@@ -1,3 +1,10 @@
+## [0.8.1](https://github.com/jwu/pi-powerline/compare/v0.8.0...v0.8.1) (2026-06-28)
+
+
+### Bug Fixes
+
+* **editor:** prevent over-wide lines in narrow terminals ([12c8ced](https://github.com/jwu/pi-powerline/commit/12c8ced96573d76480d52ffafc7addd6516bac66))
+
 # [0.8.0](https://github.com/jwu/pi-powerline/compare/v0.7.1...v0.8.0) (2026-06-09)
 
 
