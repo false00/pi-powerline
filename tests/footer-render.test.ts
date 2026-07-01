@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -103,7 +103,6 @@ function contextPercentColor(percent: number): ContextColor {
 function readAutoCompactEnabled(cwd: string): boolean {
   const settingsPath = join(cwd, '.pi', 'settings.json');
   try {
-    const { existsSync, readFileSync } = require('node:fs');
     if (existsSync(settingsPath)) {
       const content = readFileSync(settingsPath, 'utf-8');
       const settings = JSON.parse(content || '{}');

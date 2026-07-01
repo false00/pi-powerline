@@ -73,7 +73,7 @@ function centerTruncate(line: string, width: number): string {
   let result = '';
   let visibleIdx = 0;
 
-  for (let i = 0; i < line.length; ) {
+  for (let i = 0; i < line.length;) {
     const ansi = /^\x1b\[[0-9;]*m/.exec(line.slice(i));
     if (ansi) {
       const code = ansi[0];
@@ -250,17 +250,23 @@ function countUniqueSources(
   ).size;
 }
 
+function normalizeDisplayPath(path: string): string {
+  return path.replaceAll('\\', '/');
+}
+
 function formatRelativePath(cwd: string, filePath: string): string {
-  return relative(cwd, filePath) || '.';
+  return normalizeDisplayPath(relative(cwd, filePath) || '.');
 }
 
 function formatDisplayPath(cwd: string, filePath: string): string {
   const home = getHomeDir();
   const rel = relative(cwd, filePath);
-  if (!rel || !rel.startsWith('..')) return rel || '.';
+  if (!rel || !rel.startsWith('..')) return normalizeDisplayPath(rel || '.');
   if (filePath === home) return '~';
-  if (filePath.startsWith(`${home}/`)) return `~/${relative(home, filePath)}`;
-  return filePath;
+  if (filePath.startsWith(`${home}/`) || filePath.startsWith(`${home}\\`)) {
+    return normalizeDisplayPath(`~/${relative(home, filePath)}`);
+  }
+  return normalizeDisplayPath(filePath);
 }
 
 function discoverContextItems(cwd: string): string[] {
@@ -291,9 +297,9 @@ function discoverContextItems(cwd: string): string[] {
   return items;
 }
 
-function normalizeSystemPromptItems(ctx: ExtensionContext, event: BeforeAgentStartEvent): string[] {
+function normalizeSystemPromptItems(cwd: string, event: BeforeAgentStartEvent): string[] {
   const files = event.systemPromptOptions.contextFiles ?? [];
-  const nextItems = files.map((file: { path: string }) => formatRelativePath(ctx.cwd, file.path));
+  const nextItems = files.map((file: { path: string }) => formatRelativePath(cwd, file.path));
   if (event.systemPromptOptions.customPrompt) nextItems.unshift('custom system prompt');
   if (event.systemPromptOptions.appendSystemPrompt) nextItems.push('append system prompt');
   return nextItems;
@@ -551,22 +557,22 @@ function getExtensionItems(cwd: string, home = getHomeDir()): string[] {
     .map((filePath) => formatDisplayPath(cwd, filePath));
 }
 
-function shouldShowHeaderInfo(ctx: ExtensionContext, reason: SessionStartEvent['reason']): boolean {
+function shouldShowHeaderInfo(cwd: string, reason: SessionStartEvent['reason']): boolean {
   if (reason !== 'startup' && reason !== 'reload') return false;
-  const settings = readPowerlineSettings(ctx.cwd);
+  const settings = readPowerlineSettings(cwd);
   return settings.quietStartup && settings['header-info'];
 }
 
 function collectHeaderInfo(
   pi: ExtensionAPI,
-  ctx: ExtensionContext,
+  cwd: string,
+  themeCount: number,
   contextItems: string[],
   skillItems: string[],
 ): HeaderInfo {
   const commands = typeof pi.getCommands === 'function' ? pi.getCommands() : [];
-  const allThemes = typeof ctx.ui.getAllThemes === 'function' ? ctx.ui.getAllThemes() : [];
-  const extensions = getExtensionItems(ctx.cwd);
-  const packages = getPackages(ctx.cwd);
+  const extensions = getExtensionItems(cwd);
+  const packages = getPackages(cwd);
   const activeTools =
     typeof pi.getActiveTools === 'function'
       ? pi.getActiveTools().sort((a, b) => a.localeCompare(b))
@@ -580,7 +586,7 @@ function collectHeaderInfo(
     contextItems,
     contextCount: contextItems.length,
     packagesCount: packages.length,
-    themesCount: allThemes.length,
+    themesCount: themeCount,
     skillsCount: skillItems.length,
     promptsCount: countUniqueSources(commands, 'prompt'),
     extensionsCount: extensions.length,
@@ -597,8 +603,19 @@ export function registerHeader(pi: ExtensionAPI) {
   let liveTui: any = null;
   let contextItems: string[] = [];
   let skillItems: string[] = [];
+  let currentCwd = process.cwd();
+  let currentThemeCount = 0;
+  let showHeaderInfo = false;
 
-  function createHeaderComponent(ctx: ExtensionContext, reason: SessionStartEvent['reason']) {
+  function refreshHeaderState(ctx: ExtensionContext, reason = currentReason): void {
+    currentReason = reason;
+    currentCwd = ctx.cwd;
+    currentThemeCount =
+      typeof ctx.ui.getAllThemes === 'function' ? ctx.ui.getAllThemes().length : 0;
+    showHeaderInfo = shouldShowHeaderInfo(currentCwd, currentReason);
+  }
+
+  function createHeaderComponent(reason: SessionStartEvent['reason']) {
     return (tui: any, theme: Theme) => {
       liveTui = tui;
       return {
@@ -607,8 +624,8 @@ export function registerHeader(pi: ExtensionAPI) {
             theme,
             reason,
             width,
-            shouldShowHeaderInfo(ctx, reason)
-              ? collectHeaderInfo(pi, ctx, contextItems, skillItems)
+            showHeaderInfo
+              ? collectHeaderInfo(pi, currentCwd, currentThemeCount, contextItems, skillItems)
               : undefined,
           );
         },
@@ -619,23 +636,25 @@ export function registerHeader(pi: ExtensionAPI) {
 
   function enable(ctx: ExtensionContext, reason = currentReason) {
     headerEnabled = true;
-    currentReason = reason;
-    ctx.ui.setHeader(createHeaderComponent(ctx, reason));
+    refreshHeaderState(ctx, reason);
+    ctx.ui.setHeader(createHeaderComponent(currentReason));
   }
 
   function disable(ctx: ExtensionContext) {
     headerEnabled = false;
     liveTui = null;
+    showHeaderInfo = false;
     ctx.ui.setHeader(undefined);
   }
 
   // auto-enable on session start if powerline master switch + header setting are both on
   pi.on('session_start', (event, ctx) => {
     if (!ctx.hasUI) return;
+    refreshHeaderState(ctx, event.reason);
     const commands = typeof pi.getCommands === 'function' ? pi.getCommands() : [];
-    contextItems = discoverContextItems(ctx.cwd);
+    contextItems = discoverContextItems(currentCwd);
     skillItems = getCommandNames(commands, 'skill');
-    const s = readPowerlineSettings(ctx.cwd);
+    const s = readPowerlineSettings(currentCwd);
     if (s.powerline && s.header) {
       enable(ctx, event.reason);
     }
@@ -643,7 +662,8 @@ export function registerHeader(pi: ExtensionAPI) {
 
   // Refresh with Pi's exact system prompt sources once a prompt is submitted.
   pi.on('before_agent_start', (event, ctx) => {
-    const nextItems = normalizeSystemPromptItems(ctx, event);
+    refreshHeaderState(ctx);
+    const nextItems = normalizeSystemPromptItems(currentCwd, event);
     const nextSkills = (event.systemPromptOptions.skills ?? [])
       .map((skill) => skill.name)
       .sort((a, b) => a.localeCompare(b));
@@ -654,24 +674,36 @@ export function registerHeader(pi: ExtensionAPI) {
 
   // re-evaluate on model switch
   pi.on('model_select', (_event, ctx) => {
-    const s = readPowerlineSettings(ctx.cwd);
+    refreshHeaderState(ctx);
+    const s = readPowerlineSettings(currentCwd);
     const show = s.powerline && s.header;
     if (show && !headerEnabled) {
       enable(ctx);
     } else if (!show && headerEnabled) {
       disable(ctx);
+    } else if (headerEnabled) {
+      liveTui?.requestRender();
     }
   });
 
   // re-evaluate on /powerline command (settings changed)
   pi.events.on('powerline_settings_changed', (ctx) => {
     const c = ctx as ExtensionContext;
-    const s = readPowerlineSettings(c.cwd);
+    refreshHeaderState(c);
+    const s = readPowerlineSettings(currentCwd);
     const show = s.powerline && s.header;
     if (show && !headerEnabled) {
       enable(c);
     } else if (!show && headerEnabled) {
       disable(c);
+    } else if (headerEnabled) {
+      liveTui?.requestRender();
     }
+  });
+
+  pi.on('session_shutdown', (_event, ctx) => {
+    if (headerEnabled) disable(ctx);
+    contextItems = [];
+    skillItems = [];
   });
 }

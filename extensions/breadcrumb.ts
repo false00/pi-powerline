@@ -5,8 +5,8 @@
  * to render the model→folder breadcrumb.
  */
 import { basename } from 'node:path';
-import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
-import { hasNerdFonts, hexFg, withIcon } from './utils.ts';
+import type { Theme } from '@earendil-works/pi-coding-agent';
+import { hasNerdFonts, hexFg, readStaleSafe, withIcon } from './utils.ts';
 
 const NERD = hasNerdFonts();
 
@@ -25,10 +25,19 @@ export interface BreadcrumbData {
   folderText: string; // icon + folder
 }
 
-export function getBreadcrumbData(ctx: ExtensionContext | null): BreadcrumbData {
-  const cwd = ctx?.cwd ?? process.cwd();
+export interface BreadcrumbContextLike {
+  cwd?: string;
+  model?: {
+    name?: string;
+    id?: string;
+  } | null;
+}
+
+export function getBreadcrumbData(ctx: BreadcrumbContextLike | null): BreadcrumbData {
+  const cwd = readStaleSafe(() => ctx?.cwd ?? process.cwd(), process.cwd());
+  const model = readStaleSafe(() => ctx?.model ?? null, null);
   const folder = basename(cwd) || cwd;
-  const modelName = ctx?.model?.name || ctx?.model?.id || 'no-model';
+  const modelName = model?.name || model?.id || 'no-model';
 
   return {
     modelName,

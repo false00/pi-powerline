@@ -42,3 +42,18 @@ export function hexFg(hex: string, text: string): string {
   const b = parseInt(h.slice(4, 6), 16);
   return `\x1b[38;2;${r};${g};${b}m${text}`;
 }
+
+/** Detect the stale extension context error raised after session replacement or reload. */
+export function isStaleContextError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('This extension ctx is stale');
+}
+
+/** Read a value and fall back when the captured extension context has gone stale. */
+export function readStaleSafe<T>(reader: () => T, fallback: T): T {
+  try {
+    return reader();
+  } catch (error) {
+    if (isStaleContextError(error)) return fallback;
+    throw error;
+  }
+}

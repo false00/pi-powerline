@@ -1,3 +1,14 @@
+## [0.8.2](https://github.com/false00/pi-powerline/compare/v0.8.1...v0.8.2) (2026-06-30)
+
+### Bug Fixes
+
+* **ui:** stop reading stale extension ctx after reload, new session, fork, and session switch
+
+### Miscellaneous Tasks
+
+* normalize displayed paths with forward slashes for cross-platform header output
+* switch local verification scripts to standard Node/npm commands
+
 ## [0.8.1](https://github.com/jwu/pi-powerline/compare/v0.8.0...v0.8.1) (2026-06-28)
 
 

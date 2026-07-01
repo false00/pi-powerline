@@ -7,16 +7,27 @@
  */
 import type { ExtensionAPI, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import { getBreadcrumbData, renderBreadcrumbInfo } from './breadcrumb.ts';
+import {
+  getBreadcrumbData,
+  renderBreadcrumbInfo,
+  type BreadcrumbContextLike,
+} from './breadcrumb.ts';
 import { readPowerlineSettings } from './settings.ts';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // live state
 // ═══════════════════════════════════════════════════════════════════════════
 
-let liveCtx: ExtensionContext | null = null;
+let liveBreadcrumbCtx: BreadcrumbContextLike | null = null;
 let liveTui: any = null;
 let widgetEnabled = false;
+
+function snapshotBreadcrumbCtx(ctx: ExtensionContext): BreadcrumbContextLike {
+  return {
+    cwd: ctx.cwd,
+    model: ctx.model ? { name: ctx.model.name, id: ctx.model.id } : undefined,
+  };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // widget renderer
@@ -31,7 +42,7 @@ function createWidgetRenderer() {
       },
       invalidate() {},
       render(width: number): string[] {
-        const ctx = liveCtx;
+        const ctx = liveBreadcrumbCtx;
         const data = getBreadcrumbData(ctx);
         const line = renderBreadcrumbInfo(data, theme, true);
 
@@ -52,7 +63,7 @@ function createWidgetRenderer() {
 export function registerWidget(pi: ExtensionAPI) {
   function enable(ctx: ExtensionContext) {
     widgetEnabled = true;
-    liveCtx = ctx;
+    liveBreadcrumbCtx = snapshotBreadcrumbCtx(ctx);
     ctx.ui.setWidget('powerline-status', createWidgetRenderer(), {
       placement: 'aboveEditor',
     });
@@ -60,7 +71,7 @@ export function registerWidget(pi: ExtensionAPI) {
 
   function disable(ctx: ExtensionContext) {
     widgetEnabled = false;
-    liveCtx = null;
+    liveBreadcrumbCtx = null;
     ctx.ui.setWidget('powerline-status', undefined);
   }
 
@@ -82,7 +93,7 @@ export function registerWidget(pi: ExtensionAPI) {
     } else if (!show && widgetEnabled) {
       disable(ctx);
     } else if (widgetEnabled) {
-      liveCtx = ctx;
+      liveBreadcrumbCtx = snapshotBreadcrumbCtx(ctx);
       liveTui?.requestRender();
     }
   });
@@ -92,10 +103,18 @@ export function registerWidget(pi: ExtensionAPI) {
     const c = ctx as ExtensionContext;
     const s = readPowerlineSettings(c.cwd);
     const show = s.powerline && s.breadcrumb === 'top';
+    liveBreadcrumbCtx = snapshotBreadcrumbCtx(c);
     if (show && !widgetEnabled) {
       enable(c);
     } else if (!show && widgetEnabled) {
       disable(c);
+    } else if (widgetEnabled) {
+      liveTui?.requestRender();
     }
+  });
+
+  pi.on('session_shutdown', (_event, ctx) => {
+    if (widgetEnabled) disable(ctx);
+    liveTui = null;
   });
 }

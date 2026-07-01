@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { hexFg, withIcon } from '../extensions/utils.ts';
-import { ICON_FOLDER, ICON_MODEL, renderBreadcrumbInfo, SEP } from '../extensions/breadcrumb.ts';
+import {
+  getBreadcrumbData,
+  ICON_FOLDER,
+  ICON_MODEL,
+  renderBreadcrumbInfo,
+  SEP,
+} from '../extensions/breadcrumb.ts';
 
 // ═══════════════════════════════════════════════════
 // withIcon
@@ -97,33 +103,35 @@ test('widget render structure: model → sep → folder', () => {
 });
 
 // ═══════════════════════════════════════════════════
-// live state injection pattern
+// stale context safety
 // ═══════════════════════════════════════════════════
 
-test('render uses liveCtx.model for model name', () => {
-  const cases: Array<[any, string]> = [
-    [{ model: { name: 'Claude 4' } }, 'Claude 4'],
-    [{ model: { id: 'claude-4' } }, 'claude-4'],
-    [{ model: undefined }, 'no-model'],
-    [null, 'no-model'],
-  ];
+test('getBreadcrumbData falls back when ctx getters are stale', () => {
+  const staleCtx = {
+    get cwd(): string {
+      throw new Error(
+        'This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload().',
+      );
+    },
+    get model(): { name?: string; id?: string } | null {
+      throw new Error(
+        'This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload().',
+      );
+    },
+  };
 
-  for (const [ctx, expected] of cases) {
-    const modelName = ctx?.model?.name || ctx?.model?.id || 'no-model';
-    assert.equal(modelName, expected);
-  }
+  const data = getBreadcrumbData(staleCtx);
+
+  assert.equal(data.modelName, 'no-model');
+  assert.equal(data.folder, process.cwd().split(/[\\/]/).at(-1) || process.cwd());
 });
 
-test('render uses liveCtx.cwd for folder name', () => {
-  const cases: Array<[any, string]> = [
-    [{ cwd: '/home/user/projects/foo' }, '/home/user/projects/foo'],
-    [{ cwd: '/tmp' }, '/tmp'],
-    [null, process.cwd()],
-    [{}, process.cwd()],
-  ];
+test('getBreadcrumbData prefers snapshot fields when present', () => {
+  const data = getBreadcrumbData({
+    cwd: '/home/user/projects/foo',
+    model: { name: 'Claude 4 Sonnet', id: 'claude-sonnet-4-5' },
+  });
 
-  for (const [ctx, expected] of cases) {
-    const cwd = ctx?.cwd ?? process.cwd();
-    assert.equal(cwd, expected);
-  }
+  assert.equal(data.modelName, 'Claude 4 Sonnet');
+  assert.equal(data.folder, 'foo');
 });

@@ -13,7 +13,11 @@ import {
   type Theme,
   type ThemeColor,
 } from '@earendil-works/pi-coding-agent';
-import { getBreadcrumbData, renderBreadcrumbInfo } from './breadcrumb.ts';
+import {
+  getBreadcrumbData,
+  renderBreadcrumbInfo,
+  type BreadcrumbContextLike,
+} from './breadcrumb.ts';
 import { readPowerlineSettings } from './settings.ts';
 
 /** Pure transform: add > prompt prefix and borders to rendered editor lines. */
@@ -61,11 +65,18 @@ function renderPromptPrefix(
 }
 
 // live state, updated on enable / model_select
-let liveCtx: ExtensionContext | null = null;
+let liveBreadcrumbCtx: BreadcrumbContextLike | null = null;
 let liveEditorTui: any = null;
 let breadcrumbMode: string = 'inner';
 
 let currentTheme: Theme | null = null;
+
+function snapshotBreadcrumbCtx(ctx: ExtensionContext): BreadcrumbContextLike {
+  return {
+    cwd: ctx.cwd,
+    model: ctx.model ? { name: ctx.model.name, id: ctx.model.id } : undefined,
+  };
+}
 
 /** Maps each editor element to a pi theme color token. @example PromptPrefixEditor.colorTokens.prefix = "success"; */
 export interface PromptPrefixColorTokens {
@@ -129,7 +140,7 @@ export class PromptPrefixEditor extends CustomEditor {
 
     // Embed widget info (model + folder) into the top border when mode is "inner"
     if (breadcrumbMode === 'inner') {
-      const ctx = liveCtx;
+      const ctx = liveBreadcrumbCtx;
       if (ctx && theme) {
         const data = getBreadcrumbData(ctx);
         const infoPart = renderBreadcrumbInfo(data, theme, false);
@@ -178,7 +189,7 @@ export function registerEditor(pi: ExtensionAPI) {
 
   function enable(ctx: ExtensionContext) {
     editorEnabled = true;
-    liveCtx = ctx;
+    liveBreadcrumbCtx = snapshotBreadcrumbCtx(ctx);
     currentTheme = ctx.ui.theme;
     breadcrumbMode = readPowerlineSettings(ctx.cwd).breadcrumb;
     ctx.ui.setEditorComponent(createEditorFactory());
@@ -186,6 +197,7 @@ export function registerEditor(pi: ExtensionAPI) {
 
   function disable(ctx: ExtensionContext) {
     editorEnabled = false;
+    liveBreadcrumbCtx = null;
     liveEditorTui = null;
     ctx.ui.setEditorComponent(undefined);
   }
@@ -199,7 +211,7 @@ export function registerEditor(pi: ExtensionAPI) {
 
   // keep widget info in sync when model/cwd changes
   pi.on('model_select', (_event, ctx) => {
-    liveCtx = ctx;
+    liveBreadcrumbCtx = snapshotBreadcrumbCtx(ctx);
     breadcrumbMode = readPowerlineSettings(ctx.cwd).breadcrumb;
     liveEditorTui?.requestRender();
   });
@@ -209,7 +221,7 @@ export function registerEditor(pi: ExtensionAPI) {
     const c = ctx as ExtensionContext;
     const s = readPowerlineSettings(c.cwd);
     breadcrumbMode = s.breadcrumb;
-    liveCtx = c;
+    liveBreadcrumbCtx = snapshotBreadcrumbCtx(c);
     if (s.powerline && !editorEnabled) {
       enable(c);
     } else if (!s.powerline && editorEnabled) {
@@ -217,5 +229,10 @@ export function registerEditor(pi: ExtensionAPI) {
     } else if (editorEnabled) {
       liveEditorTui?.requestRender();
     }
+  });
+
+  pi.on('session_shutdown', (_event, ctx) => {
+    if (editorEnabled) disable(ctx);
+    currentTheme = null;
   });
 }

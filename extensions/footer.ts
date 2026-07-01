@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import { hasNerdFonts, hexFg, withIcon } from './utils.ts';
+import { hasNerdFonts, hexFg, readStaleSafe, withIcon } from './utils.ts';
 import { readPowerlineSettings } from './settings.ts';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -111,11 +111,78 @@ function isSessionAssistantMessage(value: unknown): value is AssistantMessage {
 // live state (updated by events)
 // ═══════════════════════════════════════════════════════════════════════════
 
+interface FooterSnapshot {
+  totalInput: number;
+  totalOutput: number;
+  totalCacheRead: number;
+  totalCacheWrite: number;
+  totalCost: number;
+  lastPersistedUsage: SessionAssistantUsage | null;
+  contextTokens: number | null;
+  contextWindow: number;
+  modelReasoning: boolean;
+  usingSubscription: boolean;
+}
+
+const EMPTY_FOOTER_SNAPSHOT: FooterSnapshot = {
+  totalInput: 0,
+  totalOutput: 0,
+  totalCacheRead: 0,
+  totalCacheWrite: 0,
+  totalCost: 0,
+  lastPersistedUsage: null,
+  contextTokens: null,
+  contextWindow: 0,
+  modelReasoning: false,
+  usingSubscription: false,
+};
+
 let liveThinkLevel = 'off';
 let liveTui: any = null;
 let isStreaming = false;
 let liveAssistantUsage: SessionAssistantUsage | null = null;
 let autoCompactEnabled = true;
+let footerSnapshot: FooterSnapshot = { ...EMPTY_FOOTER_SNAPSHOT };
+
+function resetFooterSnapshot(): void {
+  footerSnapshot = { ...EMPTY_FOOTER_SNAPSHOT };
+}
+
+function refreshFooterSnapshot(ctx: ExtensionContext): void {
+  const nextSnapshot: FooterSnapshot = { ...EMPTY_FOOTER_SNAPSHOT };
+  const entries = readStaleSafe(() => ctx.sessionManager.getEntries(), [] as Array<any>);
+
+  for (const entry of entries) {
+    if (entry?.type !== 'message' || entry.message?.role !== 'assistant') continue;
+
+    const message = entry.message as AssistantMessage;
+    if (message.stopReason === 'error' || message.stopReason === 'aborted') continue;
+
+    nextSnapshot.totalInput += message.usage.input;
+    nextSnapshot.totalOutput += message.usage.output;
+    nextSnapshot.totalCacheRead += message.usage.cacheRead;
+    nextSnapshot.totalCacheWrite += message.usage.cacheWrite;
+    nextSnapshot.totalCost += message.usage.cost.total;
+    if (getUsageTokenTotal(message.usage) > 0) {
+      nextSnapshot.lastPersistedUsage = message.usage;
+    }
+  }
+
+  const model = readStaleSafe(() => ctx.model ?? null, null);
+  nextSnapshot.contextWindow = model?.contextWindow ?? 0;
+  nextSnapshot.modelReasoning = !!model?.reasoning;
+  nextSnapshot.usingSubscription = model
+    ? readStaleSafe(() => ctx.modelRegistry.isUsingOAuth(model), false)
+    : false;
+
+  const contextUsage = readStaleSafe(() => ctx.getContextUsage(), null as any);
+  nextSnapshot.contextTokens =
+    contextUsage?.tokens ??
+    (nextSnapshot.lastPersistedUsage ? getUsageTokenTotal(nextSnapshot.lastPersistedUsage) : null);
+  nextSnapshot.contextWindow = contextUsage?.contextWindow ?? nextSnapshot.contextWindow;
+
+  footerSnapshot = nextSnapshot;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // footer renderer
@@ -129,7 +196,7 @@ function sanitizeStatusText(text: string): string {
     .trim();
 }
 
-function createFooterRenderer(ctx: ExtensionContext) {
+function createFooterRenderer() {
   return (tui: any, theme: any, footerData: any) => {
     liveTui = tui;
     const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
@@ -142,31 +209,16 @@ function createFooterRenderer(ctx: ExtensionContext) {
       invalidate() {},
       render(width: number): string[] {
         // ── cumulative token stats from persisted entries + live streaming ──
-        let totalInput = 0,
-          totalOutput = 0,
-          totalCacheRead = 0,
-          totalCacheWrite = 0,
-          totalCost = 0;
-        let lastPersistedAssistant: AssistantMessage | undefined;
-        for (const e of ctx.sessionManager.getEntries()) {
-          if (e.type === 'message' && e.message.role === 'assistant') {
-            const m = e.message as AssistantMessage;
-            if (m.stopReason === 'error' || m.stopReason === 'aborted') continue;
-            totalInput += m.usage.input;
-            totalOutput += m.usage.output;
-            totalCacheRead += m.usage.cacheRead;
-            totalCacheWrite += m.usage.cacheWrite;
-            totalCost += m.usage.cost.total;
-            if (getUsageTokenTotal(m.usage) > 0) {
-              lastPersistedAssistant = m;
-            }
-          }
-        }
+        let totalInput = footerSnapshot.totalInput;
+        let totalOutput = footerSnapshot.totalOutput;
+        let totalCacheRead = footerSnapshot.totalCacheRead;
+        let totalCacheWrite = footerSnapshot.totalCacheWrite;
+        let totalCost = footerSnapshot.totalCost;
 
         // fuse live streaming usage (not yet persisted) on top of persisted totals
         const latestUsage = isStreaming
-          ? (liveAssistantUsage ?? lastPersistedAssistant?.usage)
-          : lastPersistedAssistant?.usage;
+          ? (liveAssistantUsage ?? footerSnapshot.lastPersistedUsage ?? undefined)
+          : (footerSnapshot.lastPersistedUsage ?? undefined);
         if (isStreaming && liveAssistantUsage) {
           totalInput += liveAssistantUsage.input;
           totalOutput += liveAssistantUsage.output;
@@ -176,13 +228,16 @@ function createFooterRenderer(ctx: ExtensionContext) {
         }
 
         // ── context usage ──
-        // During streaming, ctx.getContextUsage() may be stale; estimate from usage.
-        const coreContextUsage = isStreaming && liveAssistantUsage ? null : ctx.getContextUsage();
         const contextTokens =
-          coreContextUsage?.tokens ?? (latestUsage ? getUsageTokenTotal(latestUsage) : null);
-        const contextWindow = coreContextUsage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
+          isStreaming && liveAssistantUsage
+            ? getUsageTokenTotal(liveAssistantUsage)
+            : (footerSnapshot.contextTokens ??
+              (latestUsage ? getUsageTokenTotal(latestUsage) : null));
+        const contextWindow = footerSnapshot.contextWindow;
         const contextPercent =
-          contextTokens !== null ? ((contextTokens / contextWindow) * 100).toFixed(1) : '?';
+          contextTokens !== null && contextWindow > 0
+            ? ((contextTokens / contextWindow) * 100).toFixed(1)
+            : '?';
 
         // ── git branch (leftmost, before stats) ──
         const branch = footerData.getGitBranch();
@@ -219,9 +274,8 @@ function createFooterRenderer(ctx: ExtensionContext) {
           statsParts.push(`CH${latestCacheHitRate.toFixed(1)}%`);
         }
 
-        const usingSubscription = ctx.model ? ctx.modelRegistry.isUsingOAuth(ctx.model) : false;
-        if (totalCost || usingSubscription) {
-          const costStr = `$${totalCost.toFixed(3)}${usingSubscription ? ' (sub)' : ''}`;
+        if (totalCost || footerSnapshot.usingSubscription) {
+          const costStr = `$${totalCost.toFixed(3)}${footerSnapshot.usingSubscription ? ' (sub)' : ''}`;
           statsParts.push(costStr);
         }
 
@@ -237,7 +291,7 @@ function createFooterRenderer(ctx: ExtensionContext) {
 
         // right side: think level only, colored (omitted when model lacks reasoning)
         let rightSidePlain = '';
-        if (ctx.model?.reasoning) {
+        if (footerSnapshot.modelReasoning) {
           const tl = liveThinkLevel || 'off';
           const label = THINK_LABELS[tl] ?? tl;
           rightSidePlain = withIcon(ICON_THINK, label);
@@ -295,18 +349,21 @@ export function registerFooter(pi: ExtensionAPI) {
   function enable(ctx: ExtensionContext) {
     enabled = true;
     liveThinkLevel = pi.getThinkingLevel();
-    ctx.ui.setFooter(createFooterRenderer(ctx));
+    refreshFooterSnapshot(ctx);
+    ctx.ui.setFooter(createFooterRenderer());
   }
 
   function disable(ctx: ExtensionContext) {
     enabled = false;
     liveTui = null;
+    resetFooterSnapshot();
     ctx.ui.setFooter(undefined);
   }
 
   // enable on session start if powerline master switch + footer setting are both on
   pi.on('session_start', (_event, ctx) => {
     autoCompactEnabled = readAutoCompactEnabled(ctx.cwd);
+    refreshFooterSnapshot(ctx);
     const s = readPowerlineSettings(ctx.cwd);
     if (s.powerline && s.footer) {
       enable(ctx);
@@ -322,6 +379,7 @@ export function registerFooter(pi: ExtensionAPI) {
 
   // model switch may affect reasoning support / provider count
   pi.on('model_select', (_event, ctx) => {
+    refreshFooterSnapshot(ctx);
     const s = readPowerlineSettings(ctx.cwd);
     const show = s.powerline && s.footer;
     if (show && !enabled) {
@@ -337,12 +395,15 @@ export function registerFooter(pi: ExtensionAPI) {
   // re-evaluate on /powerline command (settings changed)
   pi.events.on('powerline_settings_changed', (ctx) => {
     const c = ctx as ExtensionContext;
+    refreshFooterSnapshot(c);
     const s = readPowerlineSettings(c.cwd);
     const show = s.powerline && s.footer;
     if (show && !enabled) {
       enable(c);
     } else if (!show && enabled) {
       disable(c);
+    } else if (enabled) {
+      liveTui?.requestRender();
     }
   });
 
@@ -371,5 +432,18 @@ export function registerFooter(pi: ExtensionAPI) {
           : event.message.usage;
     }
     liveTui?.requestRender();
+  });
+
+  pi.on('turn_end', (_event, ctx) => {
+    if (!enabled) return;
+    refreshFooterSnapshot(ctx);
+    liveTui?.requestRender();
+  });
+
+  pi.on('session_shutdown', (_event, ctx) => {
+    if (enabled) disable(ctx);
+    isStreaming = false;
+    liveAssistantUsage = null;
+    liveThinkLevel = 'off';
   });
 }

@@ -160,6 +160,7 @@ interface RenderHeaderOptions {
   themes?: any[];
   activeTools?: string[];
   beforeAgentStartEvent?: any;
+  makeCtxStaleAfterStart?: boolean;
 }
 
 function renderHeader(
@@ -170,8 +171,7 @@ function renderHeader(
   let sessionStartHandler: ((event: { reason: string }, ctx: any) => void) | undefined;
   let beforeAgentStartHandler: ((event: any, ctx: any) => void) | undefined;
   let headerFactory:
-    | ((tui: any, theme: any) => { render: (width: number) => string[] })
-    | undefined;
+    ((tui: any, theme: any) => { render: (width: number) => string[] }) | undefined;
   const pi = {
     on(event: string, handler: (event: any, ctx: any) => void) {
       if (event === 'session_start') sessionStartHandler = handler;
@@ -212,6 +212,15 @@ function renderHeader(
 
   registerHeader(pi as any);
   sessionStartHandler?.({ reason }, ctx);
+  if (options.makeCtxStaleAfterStart) {
+    Object.defineProperty(ctx, 'cwd', {
+      get() {
+        throw new Error(
+          'This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload().',
+        );
+      },
+    });
+  }
   if (options.beforeAgentStartEvent) beforeAgentStartHandler?.(options.beforeAgentStartEvent, ctx);
   assert.ok(headerFactory);
   return headerFactory(tui, theme).render(width);
@@ -241,6 +250,12 @@ test('header renders resume and fork reason labels', () => {
 
   assert.ok(resumeLines.some((line) => line.includes('Session Resumed')));
   assert.ok(forkLines.some((line) => line.includes('Session Forked')));
+});
+
+test('header render does not touch stale ctx after startup snapshot', () => {
+  const lines = renderHeader('startup', 80, { makeCtxStaleAfterStart: true }).map(stripAnsi);
+
+  assert.ok(lines.some((line) => line.includes('Welcome')));
 });
 
 test('header hides diagnostic info when quietStartup is false by default', () => {

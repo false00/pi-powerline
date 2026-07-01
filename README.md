@@ -1,28 +1,50 @@
-# pi-powerline
+# @false00/pi-powerline
 
-Powerline-style UI extensions for [pi](https://github.com/badlogic/pi-mono): custom editor, breadcrumb, footer, and header.
+`@false00/pi-powerline` 是 [`jwu/pi-powerline`](https://github.com/jwu/pi-powerline) 的维护分叉版，继续提供给 [pi](https://github.com/earendil-works/pi-mono) 的 powerline 风格 UI 扩展：自定义编辑器、breadcrumb、footer 和 header。
 
-Highly inspired by [pi-powerline-footer](https://github.com/nicobailon/pi-powerline-footer).
+上游灵感来源仍然是 [pi-powerline-footer](https://github.com/nicobailon/pi-powerline-footer)。
 
-![screenshot](https://raw.githubusercontent.com/jwu/pi-powerline/refs/heads/main/assets/pi-powerline.png)
+![screenshot](https://raw.githubusercontent.com/false00/pi-powerline/refs/heads/main/assets/pi-powerline.png)
 
-## Install
+## 与上游的差异
+
+当前 fork 明确包含以下新增变更：
+
+1. **修复 stale ctx 崩溃**
+   - 修复 `ctx.reload()`、`ctx.newSession()`、`ctx.fork()`、`ctx.switchSession()` 之后，旧 UI 组件继续读取已失效 `ExtensionContext`，从而触发：
+     - `This extension ctx is stale after session replacement or reload`
+   - 处理方式：
+     - breadcrumb / widget / editor / header / footer 改为使用快照状态而不是长期捕获旧 ctx
+     - 在 `session_shutdown` 时主动清理自定义 UI 组件状态
+2. **跨平台路径显示更一致**
+   - header 中展示的上下文、扩展和包路径统一使用 `/`，减少 Windows 与 Unix 输出差异。
+3. **开发检查改为标准 Node/npm**
+   - 使用 `npm test`、`npm run typecheck`、`npm run lint`，不再依赖本地 bun 才能验证仓库。
+
+## 安装
+
+### 从 npm 安装
 
 ```bash
-pi install npm:pi-powerline
+pi install npm:@false00/pi-powerline
 ```
 
-## Settings
+### 从 GitHub 安装
 
-Settings are read from both global and project files. Project settings override global settings.
+```bash
+pi install git:github.com/false00/pi-powerline
+```
 
-| Location | Scope |
-|----------|-------|
-| `~/.pi/agent/settings.json` | Global |
-| `.pi/settings.json` | Current project |
+## 设置
+
+设置会同时从全局和项目配置读取，项目配置优先级更高。
+
+| 位置 | 作用域 |
+|---|---|
+| `~/.pi/agent/settings.json` | 全局 |
+| `.pi/settings.json` | 当前项目 |
 
 ```json
-// .pi/settings.json
 {
   "powerline": true,
   "breadcrumb": "inner",
@@ -32,42 +54,43 @@ Settings are read from both global and project files. Project settings override 
 }
 ```
 
-| Setting | Values | Default | Effect |
-|---------|--------|---------|--------|
-| `powerline` | `true` / `false` | `true` | Master switch for all pi-powerline UI extensions |
-| `breadcrumb` | `"hide"` / `"top"` / `"inner"` | `"inner"` | Breadcrumb placement |
-| `footer` | `true` / `false` | `true` | Enable custom footer |
-| `header` | `true` / `false` | `true` | Enable custom gradient-logo header |
-| `header-info` | `true` / `false` | `true` | Show header diagnostic info on startup/reload |
+| 设置项 | 可选值 | 默认值 | 说明 |
+|---|---|---|---|
+| `powerline` | `true` / `false` | `true` | 总开关 |
+| `breadcrumb` | `"hide"` / `"top"` / `"inner"` | `"inner"` | breadcrumb 位置 |
+| `footer` | `true` / `false` | `true` | 是否启用自定义 footer |
+| `header` | `true` / `false` | `true` | 是否启用渐变 header |
+| `header-info` | `true` / `false` | `true` | 是否在 startup/reload 时显示诊断信息 |
 
-### Nerd Font icons
+### Nerd Font 图标
 
-pi-powerline uses Nerd Font icons when it can infer that the terminal supports them.
+如果终端支持 Nerd Font，会自动启用图标。判断顺序：
 
-Detection order:
+1. `PI_NERD_FONTS=1` 强制开启
+2. `PI_NERD_FONTS=0` 强制关闭
+3. `GHOSTTY_RESOURCES_DIR` 存在时视为支持
+4. `TERM_PROGRAM` 或 `TERM` 包含 `iterm`、`wezterm`、`kitty`、`ghostty`、`alacritty`
+5. 否则回退为纯文本
 
-1. `PI_NERD_FONTS=1` forces icons on
-2. `PI_NERD_FONTS=0` forces icons off
-3. `GHOSTTY_RESOURCES_DIR` enables icons for Ghostty
-4. `TERM_PROGRAM` or `TERM` containing `iterm`, `wezterm`, `kitty`, `ghostty`, or `alacritty` enables icons
-5. Otherwise icons are disabled and plain text fallbacks are used
-
-For SSH or terminals that cannot be detected reliably, set it explicitly:
+SSH 或无法可靠识别的终端，建议手动指定：
 
 ```bash
 export PI_NERD_FONTS=1
 ```
 
-### Header info
+### Header 诊断信息
 
-`header-info` adds diagnostic sections under the header:
+`header-info` 会在 header 下显示：
 
-- `Context` — loaded system prompt context files, such as `AGENTS.md` and `.pi/APPEND_SYSTEM.md`
-- `Skills` — loaded skills
-- `Prompts` — loaded prompt commands
-- `Extensions` — loaded extension packages or paths
+- `Context`：系统提示上下文文件，如 `AGENTS.md`、`.pi/APPEND_SYSTEM.md`
+- `Packages`：已配置 pi package
+- `Tools`：当前激活工具
+- `Skills`：已加载 skills
+- `Prompts`：已加载 prompt commands
+- `Extensions`：已加载扩展路径
 
-It is only rendered for `startup` and `reload`, never for new sessions. It also requires Pi's `quietStartup` setting to be `true`:
+仅在 `startup` 和 `reload` 渲染；`new` / `resume` / `fork` 不显示。
+同时要求 Pi 的 `quietStartup` 为 `true`：
 
 ```json
 {
@@ -76,17 +99,32 @@ It is only rendered for `startup` and `reload`, never for new sessions. It also 
 }
 ```
 
-## Commands
+## 命令
 
-| Command | Effect |
-|---------|--------|
-| `/powerline` | Toggle all extensions on/off |
-| `/powerline info` | Show current settings |
-| `/powerline breadcrumb:top\|inner\|hide` | Set breadcrumb mode |
-| `/powerline footer:on\|off` | Toggle footer |
-| `/powerline header:on\|off` | Toggle header |
-| `/powerline header-info:on\|off` | Toggle header diagnostic info |
+| 命令 | 说明 |
+|---|---|
+| `/powerline` | 切换总开关 |
+| `/powerline info` | 查看当前设置 |
+| `/powerline breadcrumb:top\|inner\|hide` | 设置 breadcrumb 模式 |
+| `/powerline footer:on\|off` | 开关 footer |
+| `/powerline header:on\|off` | 开关 header |
+| `/powerline header-info:on\|off` | 开关 header 诊断信息 |
 
-## License
+## 开发与验证
+
+```bash
+npm install
+npm test
+npm run typecheck
+npm run lint
+```
+
+当前仓库包含：
+
+- `tsconfig.check.json`：可复现的 TypeScript 检查配置
+- `semantic-release`：发布到 GitHub / npm 的自动化配置
+- `CHANGELOG.md`：显式记录 fork 版本变更
+
+## 许可证
 
 MIT
