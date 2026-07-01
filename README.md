@@ -121,6 +121,7 @@ npm install
 npm test
 npm run typecheck
 npm run lint
+npm pack --dry-run
 ```
 
 This repository includes:
@@ -128,6 +129,24 @@ This repository includes:
 - `tsconfig.check.json`: reproducible TypeScript check configuration
 - `semantic-release`: automated release config for GitHub / npm
 - `CHANGELOG.md`: explicit fork version history
+- `CONTRIBUTING.md`: contributor workflow and release checklist
+- `SECURITY.md`: vulnerability reporting and hardening guidance
+
+## Manual publish note
+
+Recommended manual publish flow:
+
+```bash
+npm run lint && npm pack --dry-run && npm publish --access public
+```
+
+If you intentionally use:
+
+```bash
+npm publish --access public --ignore-scripts
+```
+
+that is valid for this package, but it bypasses `prepublishOnly`, so only do it after running the validation steps yourself.
 
 ## License
 

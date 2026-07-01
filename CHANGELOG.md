@@ -1,3 +1,12 @@
+## [0.8.4](https://github.com/false00/pi-powerline/compare/v0.8.3...v0.8.4) (2026-07-01)
+
+### Miscellaneous Tasks
+
+* add CI, CodeQL, and dependency-review workflows
+* add SECURITY.md and CONTRIBUTING.md
+* add `prepublishOnly` validation and document safe manual publish flow
+* stop ignoring `package-lock.json`
+
 ## [0.8.3](https://github.com/false00/pi-powerline/compare/v0.8.2...v0.8.3) (2026-07-01)
 
 ### Features
