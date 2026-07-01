@@ -1,6 +1,6 @@
 {
   "name": "@false00/pi-powerline",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "Maintained fork of pi-powerline with stale-session-safe UI rendering for pi coding agent",
   "homepage": "https://github.com/false00/pi-powerline#readme",
   "repository": {
@@ -39,10 +39,10 @@
     "lint": "npm run format:check && npm run typecheck && npm test",
     "format": "prettier --write \"**/*.{ts,md,json,cjs}\"",
     "format:check": "prettier --check \"**/*.{ts,md,json,cjs}\"",
-    "prepare": "[ -d .git ] && simple-git-hooks || true",
+    "prepare": "node scripts/prepare.mjs",
     "prepublishOnly": "npm run lint && npm pack --dry-run",
-    "release": "GH_TOKEN=$(gh auth token) semantic-release --no-ci",
-    "release:dry": "GH_TOKEN=$(gh auth token) semantic-release --no-ci --dry-run"
+    "release": "node scripts/semantic-release.mjs --no-ci",
+    "release:dry": "node scripts/semantic-release.mjs --no-ci --dry-run"
   },
   "publishConfig": {
     "access": "public"

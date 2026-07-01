@@ -1,3 +1,9 @@
+## [0.8.5](https://github.com/false00/pi-powerline/compare/v0.8.4...v0.8.5) (2026-07-01)
+
+### Bug Fixes
+
+* make `prepare` and release scripts cross-platform so npm commands work on Windows cmd/PowerShell
+
 ## [0.8.4](https://github.com/false00/pi-powerline/compare/v0.8.3...v0.8.4) (2026-07-01)
 
 ### Miscellaneous Tasks
