@@ -36,8 +36,27 @@ function buildStatsParts(usage: UsageLike, cost = 0): string[] {
   return parts;
 }
 
-function getSessionMasterTotal(usage: UsageLike, subagentTotal: number): number {
-  return usage.input + usage.output + usage.cacheWrite + subagentTotal;
+function buildCostStatsParts(mainCost: number, subagentCost: number, estimated = false): string[] {
+  const suffix = estimated ? ' est' : '';
+  const parts: string[] = [];
+  if (mainCost || estimated) parts.push(`$${mainCost.toFixed(3)}${suffix}`);
+  if (subagentCost > 0) {
+    parts.push(`Σ$${subagentCost.toFixed(3)}${suffix}`);
+    parts.push(`T$${(mainCost + subagentCost).toFixed(3)}${suffix}`);
+  }
+  return parts;
+}
+
+function buildSubagentStatsParts(totals: {
+  input: number;
+  output: number;
+  total?: number;
+}): string[] {
+  const parts: string[] = [];
+  if (totals.input) parts.push(`Σ↑${formatTokens(totals.input)}`);
+  if (totals.output) parts.push(`Σ↓${formatTokens(totals.output)}`);
+  if (parts.length === 0 && totals.total) parts.push(`Σ${formatTokens(totals.total)}`);
+  return parts;
 }
 
 // ── formatTokens ──
@@ -117,16 +136,31 @@ test('stats parts place CH after R/W and before cost', () => {
   );
 });
 
-test('master total includes subagents and excludes cacheRead', () => {
-  assert.equal(
-    getSessionMasterTotal({ input: 10000, output: 800, cacheRead: 30000, cacheWrite: 5000 }, 1200),
-    17000,
-  );
+test('subagent stats show summed input and output separately', () => {
+  assert.deepEqual(buildSubagentStatsParts({ input: 1200, output: 3400 }), ['Σ↑1.2k', 'Σ↓3.4k']);
 });
 
-test('master total matches session total when no subagents ran', () => {
-  assert.equal(
-    getSessionMasterTotal({ input: 1000, output: 250, cacheRead: 4000, cacheWrite: 500 }, 0),
-    1750,
-  );
+test('subagent stats omit empty input or output sides', () => {
+  assert.deepEqual(buildSubagentStatsParts({ input: 0, output: 3400 }), ['Σ↓3.4k']);
+  assert.deepEqual(buildSubagentStatsParts({ input: 1200, output: 0 }), ['Σ↑1.2k']);
+});
+
+test('subagent stats fall back to legacy combined total when split data is unavailable', () => {
+  assert.deepEqual(buildSubagentStatsParts({ input: 0, output: 0, total: 1750 }), ['Σ1.8k']);
+});
+
+test('cost stats show main, subagent, and combined totals', () => {
+  assert.deepEqual(buildCostStatsParts(0.123, 0.045), ['$0.123', 'Σ$0.045', 'T$0.168']);
+});
+
+test('subscription cost stats are clearly labeled as estimates', () => {
+  assert.deepEqual(buildCostStatsParts(0.123, 0.045, true), [
+    '$0.123 est',
+    'Σ$0.045 est',
+    'T$0.168 est',
+  ]);
+});
+
+test('subscription main cost still shows estimate label with zero usage cost', () => {
+  assert.deepEqual(buildCostStatsParts(0, 0, true), ['$0.000 est']);
 });

@@ -16,10 +16,12 @@ This fork currently includes the following explicit additions:
    - Approach:
      - breadcrumb / widget / editor / header / footer now use snapshot state instead of holding long-lived old ctx references
      - custom UI state is proactively cleaned up during `session_shutdown`
-2. **Footer supports subagent-inclusive token totals**
-   - If `@tintinweb/pi-subagents` is installed and used, the footer shows an extra `Σ...` segment.
-   - `Σ` represents the combined total of the current main-session tokens plus subagent tokens.
-   - That total is written into the current session when subagents complete, so it remains available after `/resume`.
+2. **Footer supports subagent-inclusive token totals and cost estimates**
+   - If `@tintinweb/pi-subagents` is installed and used, the footer shows extra `Σ↑...` and `Σ↓...` segments.
+   - Those segments represent the summed input and output tokens used by all subagents in the current session.
+   - When subagent cost data is available, the footer also shows `Σ$...` for summed subagent cost and `T$...` for the combined main-session + subagent cost.
+   - Subscription-auth cost displays are labeled with `est` so Copilot / OAuth-backed sessions are clearly shown as estimates rather than exact billing.
+   - That usage is written into the current session when subagents complete, so it remains available after `/resume`.
 3. **More consistent cross-platform path display**
    - Header-rendered context, extension, and package paths are normalized to `/`, reducing Windows/Unix display differences.
 4. **Development checks use standard Node/npm commands**

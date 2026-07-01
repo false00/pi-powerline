@@ -58,6 +58,14 @@ function formatTokens(count: number): string {
   return `${Math.round(count / 1000000)}M`;
 }
 
+function formatCost(amount: number): string {
+  return `$${amount.toFixed(3)}`;
+}
+
+function formatCostStat(prefix: string, amount: number, estimated: boolean): string {
+  return `${prefix}${formatCost(amount)}${estimated ? ' est' : ''}`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // think level display
 // ═══════════════════════════════════════════════════════════════════════════
@@ -134,16 +142,22 @@ interface SubagentUsageEntry {
   input?: number;
   output?: number;
   cacheWrite?: number;
+  cost?: number;
   status?: string;
 }
 
 interface SubagentLifecycleEvent {
   id: string;
   status?: string;
+  cost?: number | { total?: number };
+  usage?: {
+    cost?: number | { total?: number };
+  };
   tokens?: {
     input?: number;
     output?: number;
     total?: number;
+    cost?: number | { total?: number };
   };
 }
 
@@ -155,9 +169,18 @@ interface SubagentManagerLike {
           input?: number;
           output?: number;
           cacheWrite?: number;
+          cost?: number;
         };
       }
     | undefined;
+}
+
+interface SubagentUsageTotals {
+  input: number;
+  output: number;
+  cacheWrite: number;
+  total: number;
+  cost: number;
 }
 
 const EMPTY_FOOTER_SNAPSHOT: FooterSnapshot = {
@@ -188,31 +211,66 @@ function getSubagentManager(): SubagentManagerLike | undefined {
     SubagentManagerLike | undefined;
 }
 
-function getSubagentLifetimeTotal(
+function readCostTotal(value: unknown): number {
+  if (typeof value === 'number') return Math.max(0, value);
+  if (typeof value === 'object' && value !== null && typeof (value as any).total === 'number') {
+    return Math.max(0, (value as any).total);
+  }
+  return 0;
+}
+
+function getSubagentUsageTotals(
   value:
     | {
         input?: number;
         output?: number;
         cacheWrite?: number;
+        total?: number;
+        cost?: number;
       }
     | null
     | undefined,
-): number {
-  if (!value) return 0;
-  return (value.input ?? 0) + (value.output ?? 0) + (value.cacheWrite ?? 0);
+): SubagentUsageTotals {
+  const input = Math.max(0, value?.input ?? 0);
+  const output = Math.max(0, value?.output ?? 0);
+  const cacheWrite = Math.max(0, value?.cacheWrite ?? 0);
+  const total = Math.max(input + output + cacheWrite, value?.total ?? 0);
+  const cost = readCostTotal(value?.cost);
+  return { input, output, cacheWrite, total, cost };
 }
 
-function getPersistedSubagentTotal(): number {
-  let total = 0;
-  for (const entry of subagentUsageById.values()) total += entry.total;
-  return total;
+function sumSubagentUsage(
+  target: SubagentUsageTotals,
+  value:
+    | {
+        input?: number;
+        output?: number;
+        cacheWrite?: number;
+        total?: number;
+        cost?: number;
+      }
+    | null
+    | undefined,
+): void {
+  const usage = getSubagentUsageTotals(value);
+  target.input += usage.input;
+  target.output += usage.output;
+  target.cacheWrite += usage.cacheWrite;
+  target.total += usage.total;
+  target.cost += usage.cost;
 }
 
-function getRunningSubagentTotal(): number {
+function getPersistedSubagentUsageTotals(): SubagentUsageTotals {
+  const totals: SubagentUsageTotals = { input: 0, output: 0, cacheWrite: 0, total: 0, cost: 0 };
+  for (const entry of subagentUsageById.values()) sumSubagentUsage(totals, entry);
+  return totals;
+}
+
+function getRunningSubagentUsageTotals(): SubagentUsageTotals {
   const manager = getSubagentManager();
-  if (!manager) return 0;
+  if (!manager) return { input: 0, output: 0, cacheWrite: 0, total: 0, cost: 0 };
 
-  let total = 0;
+  const totals: SubagentUsageTotals = { input: 0, output: 0, cacheWrite: 0, total: 0, cost: 0 };
   const staleIds: string[] = [];
   for (const agentId of runningSubagentIds) {
     const record = manager.getRecord(agentId);
@@ -220,7 +278,7 @@ function getRunningSubagentTotal(): number {
       staleIds.push(agentId);
       continue;
     }
-    total += getSubagentLifetimeTotal(record.lifetimeUsage);
+    sumSubagentUsage(totals, record.lifetimeUsage);
     if (
       record.status &&
       ['completed', 'steered', 'aborted', 'stopped', 'error'].includes(record.status)
@@ -230,21 +288,18 @@ function getRunningSubagentTotal(): number {
   }
 
   for (const agentId of staleIds) runningSubagentIds.delete(agentId);
-  return total;
+  return totals;
 }
 
-function getSessionMasterTotal(
-  mainInput: number,
-  mainOutput: number,
-  mainCacheWrite: number,
-): number {
-  return (
-    mainInput +
-    mainOutput +
-    mainCacheWrite +
-    getPersistedSubagentTotal() +
-    getRunningSubagentTotal()
-  );
+function getAllSubagentUsageTotals(): SubagentUsageTotals {
+  const totals = getPersistedSubagentUsageTotals();
+  const runningTotals = getRunningSubagentUsageTotals();
+  totals.input += runningTotals.input;
+  totals.output += runningTotals.output;
+  totals.cacheWrite += runningTotals.cacheWrite;
+  totals.total += runningTotals.total;
+  totals.cost += runningTotals.cost;
+  return totals;
 }
 
 function refreshPersistedSubagentUsage(ctx: ExtensionContext): void {
@@ -254,8 +309,15 @@ function refreshPersistedSubagentUsage(ctx: ExtensionContext): void {
   for (const entry of entries) {
     if (entry?.type !== 'custom' || entry.customType !== SUBAGENT_USAGE_ENTRY_TYPE) continue;
     const data = entry.data as SubagentUsageEntry | undefined;
-    if (!data?.agentId || typeof data.total !== 'number' || data.total <= 0) continue;
-    nextUsage.set(data.agentId, data);
+    if (!data?.agentId) continue;
+
+    const usage = getSubagentUsageTotals(data);
+    if (usage.total <= 0) continue;
+    nextUsage.set(data.agentId, {
+      ...data,
+      total: usage.total,
+      ...(usage.cost > 0 ? { cost: usage.cost } : {}),
+    });
   }
 
   subagentUsageById = nextUsage;
@@ -284,19 +346,29 @@ function ensureSubagentPolling(enabled: boolean): void {
   }, SUBAGENT_POLL_MS);
 }
 
+function getSubagentEventCost(event: SubagentLifecycleEvent): number {
+  return Math.max(
+    readCostTotal(event.cost),
+    readCostTotal(event.usage?.cost),
+    readCostTotal(event.tokens?.cost),
+  );
+}
+
 function persistSubagentUsage(pi: ExtensionAPI, event: SubagentLifecycleEvent): void {
-  const total = event.tokens?.total ?? 0;
+  const input = Math.max(0, event.tokens?.input ?? 0);
+  const output = Math.max(0, event.tokens?.output ?? 0);
+  const total = Math.max(event.tokens?.total ?? 0, input + output);
   if (!event.id || total <= 0) return;
 
-  const input = event.tokens?.input ?? 0;
-  const output = event.tokens?.output ?? 0;
   const cacheWrite = Math.max(0, total - input - output);
+  const cost = getSubagentEventCost(event);
   const data: SubagentUsageEntry = {
     agentId: event.id,
     total,
     input,
     output,
     cacheWrite,
+    ...(cost > 0 ? { cost } : {}),
     status: event.status,
   };
 
@@ -434,14 +506,20 @@ function createFooterRenderer() {
           statsParts.push(`CH${latestCacheHitRate.toFixed(1)}%`);
         }
 
-        if (totalCost || footerSnapshot.usingSubscription) {
-          const costStr = `$${totalCost.toFixed(3)}${footerSnapshot.usingSubscription ? ' (sub)' : ''}`;
-          statsParts.push(costStr);
+        const estimatedCost = footerSnapshot.usingSubscription;
+        if (totalCost || estimatedCost) {
+          statsParts.push(formatCostStat('', totalCost, estimatedCost));
         }
 
-        const masterTotal = getSessionMasterTotal(totalInput, totalOutput, totalCacheWrite);
-        if (masterTotal > totalInput + totalOutput + totalCacheWrite) {
-          statsParts.push(`Σ${formatTokens(masterTotal)}`);
+        const subagentUsage = getAllSubagentUsageTotals();
+        if (subagentUsage.input) statsParts.push(`Σ↑${formatTokens(subagentUsage.input)}`);
+        if (subagentUsage.output) statsParts.push(`Σ↓${formatTokens(subagentUsage.output)}`);
+        if (!subagentUsage.input && !subagentUsage.output && subagentUsage.total > 0) {
+          statsParts.push(`Σ${formatTokens(subagentUsage.total)}`);
+        }
+        if (subagentUsage.cost > 0) {
+          statsParts.push(formatCostStat('Σ', subagentUsage.cost, estimatedCost));
+          statsParts.push(formatCostStat('T', totalCost + subagentUsage.cost, estimatedCost));
         }
 
         let statsLeft = statsParts.join(' ');
