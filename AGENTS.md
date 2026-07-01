@@ -1,66 +1,66 @@
-这是一个 pi 插件项目，提供 powerline 风格的 UI 扩展：编辑器、面包屑、底部栏、页头。
+This is a pi plugin project that provides powerline-style UI extensions: editor, breadcrumb, footer, and header.
 
-## 项目结构
+## Project structure
 
 ```
 .
-├── AGENTS.md               # 项目协作规则（本文件）
-├── README.md               # 安装、使用、开发说明
-├── CHANGELOG.md            # 发布变更记录
-├── LICENSE                 # MIT 许可证
-├── package.json            # npm 包声明，"pi" 字段指向 extensions 目录
-├── assets/                 # README 与包 gallery 图片资源
-├── extensions/             # pi 标准扩展目录
-│   ├── index.ts            # 唯一入口，汇总注册所有扩展
-│   ├── editor.ts           # 编辑器扩展（PromptPrefixEditor）
-│   ├── breadcrumb.ts       # 面包屑渲染辅助
-│   ├── widget.ts           # 顶部面包屑 widget
-│   ├── footer.ts           # 底部栏扩展（token 统计 + git 分支）
-│   ├── header.ts           # 页头扩展（渐变色 PI logo）
-│   └── settings.ts         # 设置读取与写入
-├── tests/                  # 单元测试
+├── AGENTS.md               # Project collaboration rules (this file)
+├── README.md               # Installation, usage, and development docs
+├── CHANGELOG.md            # Release history
+├── LICENSE                 # MIT license
+├── package.json            # npm package manifest; the "pi" field points to the extensions directory
+├── assets/                 # README and package gallery image assets
+├── extensions/             # Standard pi extension directory
+│   ├── index.ts            # Single entry point; registers all extensions
+│   ├── editor.ts           # Editor extension (PromptPrefixEditor)
+│   ├── breadcrumb.ts       # Breadcrumb rendering helpers
+│   ├── widget.ts           # Top breadcrumb widget
+│   ├── footer.ts           # Footer extension (token stats + git branch)
+│   ├── header.ts           # Header extension (gradient PI logo)
+│   └── settings.ts         # Settings read/write helpers
+├── tests/                  # Unit tests
 ├── .pi/
-│   ├── settings.json       # pi 项目级配置
-│   ├── APPEND_SYSTEM.md    # 追加到 system prompt 的内容
+│   ├── settings.json       # Project-level pi config
+│   ├── APPEND_SYSTEM.md    # Content appended to the system prompt
 │   └── extensions/
-│       └── auto-format.ts  # 编辑 ts 文件后自动 prettier
-├── tsconfig.json           # LSP 类型解析（gitignored，每人按自己 pi 安装路径创建）
+│       └── auto-format.ts  # Automatically run prettier after editing ts files
+├── tsconfig.json           # LSP type resolution (gitignored; each developer creates it for their local pi install path)
 └── .gitignore
 ```
 
-## 架构说明
+## Architecture
 
-- `extensions/index.ts` 是 pi 包唯一入口，`package.json` 中 `"pi": { "extensions": ["./extensions"] }` 声明
-- 每个扩展模块导出 `registerXxx(pi)` 函数，由 `extensions/index.ts` 统一调用
-- 辅助函数内联在各模块中；共享的 UI/设置辅助放在 `extensions/breadcrumb.ts` 与 `extensions/settings.ts`
+- `extensions/index.ts` is the only pi package entry point, declared in `package.json` as `"pi": { "extensions": ["./extensions"] }`
+- Each extension module exports a `registerXxx(pi)` function, and `extensions/index.ts` wires them together
+- Small helpers stay inline in each module; shared UI/settings helpers live in `extensions/breadcrumb.ts` and `extensions/settings.ts`
 
-## 工具链
+## Tooling
 
-- 运行时使用 **bun**（`bun test`、`bun prettier`）
-- `.pi/extensions/auto-format.ts` — edit/write 工具操作 ts 文件后自动 prettier
-- `simple-git-hooks` — git commit 前自动 prettier check + bun test + commitlint
-- 测试使用 `bun test`（兼容 node:test 语法）
-- 格式化配置：单引号、分号、尾随逗号、2 空格缩进、lf 换行、100 字符宽
+- Runtime originally used **bun** (`bun test`, `bun prettier`)
+- `.pi/extensions/auto-format.ts` — automatically runs prettier after `edit`/`write` tool operations on ts files
+- `simple-git-hooks` — runs prettier check + tests + commitlint before git commits
+- Tests were originally run with `bun test` (compatible with `node:test` syntax)
+- Formatting conventions: single quotes, semicolons, trailing commas, 2-space indentation, LF line endings, 100-character width
 
-## 协作规则
+## Collaboration rules
 
-### 编辑
+### Editing
 
-- 文档默认使用简洁中文
-- 代码使用 2 空格缩进
-- 代码注释必须使用英文
-- 注释力求简洁
-- 编辑 `.ts` / `.json` 文件后，必须运行三轮检查：
-  1. `bun prettier --write <files>` — 格式化
-  2. `bun tsc --noEmit --ignoreDeprecations 6.0` — 类型检查
-  3. `bun test` — 单元测试
+- Documentation should use concise English by default
+- Code uses 2-space indentation
+- Code comments must be in English
+- Keep comments concise
+- After editing `.ts` / `.json` files, run three checks:
+  1. `bun prettier --write <files>` — formatting
+  2. `bun tsc --noEmit --ignoreDeprecations 6.0` — type check
+  3. `bun test` — unit tests
 
-### 创建
+### Creating
 
-- 创建文件前，必须先检查目标文件是否已经存在，避免重复创建、误覆盖或制造重复文件
+- Before creating a file, first check whether the target file already exists to avoid duplication or accidental overwrite
 
-### 搜索
+### Search
 
-- 默认不全库扫描，按任务读取相关笔记与必要索引
-- 搜索文件内容优先使用 `rg`（ripgrep），而非 `find` 或 `grep`
-- 获取 GitHub 仓库信息优先使用 `gh`
+- Do not scan the whole repository by default; read relevant notes and the necessary indexes for the task
+- Prefer `rg` (ripgrep) for content search instead of `find` or `grep`
+- Prefer `gh` for GitHub repository information

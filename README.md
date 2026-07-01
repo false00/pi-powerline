@@ -1,52 +1,52 @@
 # @false00/pi-powerline
 
-`@false00/pi-powerline` 是 [`jwu/pi-powerline`](https://github.com/jwu/pi-powerline) 的维护分叉版，继续提供给 [pi](https://github.com/earendil-works/pi-mono) 的 powerline 风格 UI 扩展：自定义编辑器、breadcrumb、footer 和 header。
+`@false00/pi-powerline` is a maintained fork of [`jwu/pi-powerline`](https://github.com/jwu/pi-powerline), continuing to provide powerline-style UI extensions for [pi](https://github.com/earendil-works/pi-mono): a custom editor, breadcrumb, footer, and header.
 
-上游灵感来源仍然是 [pi-powerline-footer](https://github.com/nicobailon/pi-powerline-footer)。
+The upstream inspiration still comes from [pi-powerline-footer](https://github.com/nicobailon/pi-powerline-footer).
 
 ![screenshot](https://raw.githubusercontent.com/false00/pi-powerline/refs/heads/main/assets/pi-powerline.png)
 
-## 与上游的差异
+## Differences from upstream
 
-当前 fork 明确包含以下新增变更：
+This fork currently includes the following explicit additions:
 
-1. **修复 stale ctx 崩溃**
-   - 修复 `ctx.reload()`、`ctx.newSession()`、`ctx.fork()`、`ctx.switchSession()` 之后，旧 UI 组件继续读取已失效 `ExtensionContext`，从而触发：
+1. **Fixes stale ctx crashes**
+   - Fixes cases where old UI components kept reading an invalid `ExtensionContext` after `ctx.reload()`, `ctx.newSession()`, `ctx.fork()`, or `ctx.switchSession()` and triggered:
      - `This extension ctx is stale after session replacement or reload`
-   - 处理方式：
-     - breadcrumb / widget / editor / header / footer 改为使用快照状态而不是长期捕获旧 ctx
-     - 在 `session_shutdown` 时主动清理自定义 UI 组件状态
-2. **footer 支持子代理总 token 汇总**
-   - 如果安装并使用 `@tintinweb/pi-subagents`，footer 会额外显示 `Σ...` 段。
-   - `Σ` 表示当前主会话 token 与 subagents token 的合计总量。
-   - 该总量会在子代理完成时写入当前 session，因此 `/resume` 后仍能保留历史累计值。
-3. **跨平台路径显示更一致**
-   - header 中展示的上下文、扩展和包路径统一使用 `/`，减少 Windows 与 Unix 输出差异。
-4. **开发检查改为标准 Node/npm**
-   - 使用 `npm test`、`npm run typecheck`、`npm run lint`，不再依赖本地 bun 才能验证仓库。
+   - Approach:
+     - breadcrumb / widget / editor / header / footer now use snapshot state instead of holding long-lived old ctx references
+     - custom UI state is proactively cleaned up during `session_shutdown`
+2. **Footer supports subagent-inclusive token totals**
+   - If `@tintinweb/pi-subagents` is installed and used, the footer shows an extra `Σ...` segment.
+   - `Σ` represents the combined total of the current main-session tokens plus subagent tokens.
+   - That total is written into the current session when subagents complete, so it remains available after `/resume`.
+3. **More consistent cross-platform path display**
+   - Header-rendered context, extension, and package paths are normalized to `/`, reducing Windows/Unix display differences.
+4. **Development checks use standard Node/npm commands**
+   - Uses `npm test`, `npm run typecheck`, and `npm run lint`, so local validation no longer depends on bun.
 
-## 安装
+## Install
 
-### 从 npm 安装
+### Install from npm
 
 ```bash
 pi install npm:@false00/pi-powerline
 ```
 
-### 从 GitHub 安装
+### Install from GitHub
 
 ```bash
 pi install git:github.com/false00/pi-powerline
 ```
 
-## 设置
+## Settings
 
-设置会同时从全局和项目配置读取，项目配置优先级更高。
+Settings are read from both global and project configuration, with project settings taking precedence.
 
-| 位置 | 作用域 |
+| Location | Scope |
 |---|---|
-| `~/.pi/agent/settings.json` | 全局 |
-| `.pi/settings.json` | 当前项目 |
+| `~/.pi/agent/settings.json` | Global |
+| `.pi/settings.json` | Current project |
 
 ```json
 {
@@ -58,43 +58,43 @@ pi install git:github.com/false00/pi-powerline
 }
 ```
 
-| 设置项 | 可选值 | 默认值 | 说明 |
+| Setting | Values | Default | Description |
 |---|---|---|---|
-| `powerline` | `true` / `false` | `true` | 总开关 |
-| `breadcrumb` | `"hide"` / `"top"` / `"inner"` | `"inner"` | breadcrumb 位置 |
-| `footer` | `true` / `false` | `true` | 是否启用自定义 footer |
-| `header` | `true` / `false` | `true` | 是否启用渐变 header |
-| `header-info` | `true` / `false` | `true` | 是否在 startup/reload 时显示诊断信息 |
+| `powerline` | `true` / `false` | `true` | Master switch |
+| `breadcrumb` | `"hide"` / `"top"` / `"inner"` | `"inner"` | Breadcrumb placement |
+| `footer` | `true` / `false` | `true` | Enable custom footer |
+| `header` | `true` / `false` | `true` | Enable gradient header |
+| `header-info` | `true` / `false` | `true` | Show diagnostic info during startup/reload |
 
-### Nerd Font 图标
+### Nerd Font icons
 
-如果终端支持 Nerd Font，会自动启用图标。判断顺序：
+If the terminal supports Nerd Font, icons are enabled automatically. Detection order:
 
-1. `PI_NERD_FONTS=1` 强制开启
-2. `PI_NERD_FONTS=0` 强制关闭
-3. `GHOSTTY_RESOURCES_DIR` 存在时视为支持
-4. `TERM_PROGRAM` 或 `TERM` 包含 `iterm`、`wezterm`、`kitty`、`ghostty`、`alacritty`
-5. 否则回退为纯文本
+1. `PI_NERD_FONTS=1` forces icons on
+2. `PI_NERD_FONTS=0` forces icons off
+3. `GHOSTTY_RESOURCES_DIR` implies support
+4. `TERM_PROGRAM` or `TERM` contains `iterm`, `wezterm`, `kitty`, `ghostty`, or `alacritty`
+5. Otherwise it falls back to plain text
 
-SSH 或无法可靠识别的终端，建议手动指定：
+For SSH sessions or terminals that cannot be detected reliably, set it explicitly:
 
 ```bash
 export PI_NERD_FONTS=1
 ```
 
-### Header 诊断信息
+### Header diagnostics
 
-`header-info` 会在 header 下显示：
+`header-info` displays the following under the header:
 
-- `Context`：系统提示上下文文件，如 `AGENTS.md`、`.pi/APPEND_SYSTEM.md`
-- `Packages`：已配置 pi package
-- `Tools`：当前激活工具
-- `Skills`：已加载 skills
-- `Prompts`：已加载 prompt commands
-- `Extensions`：已加载扩展路径
+- `Context`: system-prompt context files such as `AGENTS.md` and `.pi/APPEND_SYSTEM.md`
+- `Packages`: configured pi packages
+- `Tools`: currently active tools
+- `Skills`: loaded skills
+- `Prompts`: loaded prompt commands
+- `Extensions`: loaded extension paths
 
-仅在 `startup` 和 `reload` 渲染；`new` / `resume` / `fork` 不显示。
-同时要求 Pi 的 `quietStartup` 为 `true`：
+It is rendered only for `startup` and `reload`; it is not shown for `new`, `resume`, or `fork`.
+It also requires Pi's `quietStartup` setting to be `true`:
 
 ```json
 {
@@ -103,18 +103,18 @@ export PI_NERD_FONTS=1
 }
 ```
 
-## 命令
+## Commands
 
-| 命令 | 说明 |
+| Command | Description |
 |---|---|
-| `/powerline` | 切换总开关 |
-| `/powerline info` | 查看当前设置 |
-| `/powerline breadcrumb:top\|inner\|hide` | 设置 breadcrumb 模式 |
-| `/powerline footer:on\|off` | 开关 footer |
-| `/powerline header:on\|off` | 开关 header |
-| `/powerline header-info:on\|off` | 开关 header 诊断信息 |
+| `/powerline` | Toggle the master switch |
+| `/powerline info` | Show current settings |
+| `/powerline breadcrumb:top\|inner\|hide` | Set breadcrumb mode |
+| `/powerline footer:on\|off` | Toggle footer |
+| `/powerline header:on\|off` | Toggle header |
+| `/powerline header-info:on\|off` | Toggle header diagnostics |
 
-## 开发与验证
+## Development and verification
 
 ```bash
 npm install
@@ -123,12 +123,12 @@ npm run typecheck
 npm run lint
 ```
 
-当前仓库包含：
+This repository includes:
 
-- `tsconfig.check.json`：可复现的 TypeScript 检查配置
-- `semantic-release`：发布到 GitHub / npm 的自动化配置
-- `CHANGELOG.md`：显式记录 fork 版本变更
+- `tsconfig.check.json`: reproducible TypeScript check configuration
+- `semantic-release`: automated release config for GitHub / npm
+- `CHANGELOG.md`: explicit fork version history
 
-## 许可证
+## License
 
 MIT
