@@ -16,9 +16,13 @@
    - 处理方式：
      - breadcrumb / widget / editor / header / footer 改为使用快照状态而不是长期捕获旧 ctx
      - 在 `session_shutdown` 时主动清理自定义 UI 组件状态
-2. **跨平台路径显示更一致**
+2. **footer 支持子代理总 token 汇总**
+   - 如果安装并使用 `@tintinweb/pi-subagents`，footer 会额外显示 `Σ...` 段。
+   - `Σ` 表示当前主会话 token 与 subagents token 的合计总量。
+   - 该总量会在子代理完成时写入当前 session，因此 `/resume` 后仍能保留历史累计值。
+3. **跨平台路径显示更一致**
    - header 中展示的上下文、扩展和包路径统一使用 `/`，减少 Windows 与 Unix 输出差异。
-3. **开发检查改为标准 Node/npm**
+4. **开发检查改为标准 Node/npm**
    - 使用 `npm test`、`npm run typecheck`、`npm run lint`，不再依赖本地 bun 才能验证仓库。
 
 ## 安装

@@ -36,6 +36,10 @@ function buildStatsParts(usage: UsageLike, cost = 0): string[] {
   return parts;
 }
 
+function getSessionMasterTotal(usage: UsageLike, subagentTotal: number): number {
+  return usage.input + usage.output + usage.cacheWrite + subagentTotal;
+}
+
 // ── formatTokens ──
 
 test('formatTokens: < 1000 returns exact number', () => {
@@ -110,5 +114,19 @@ test('stats parts place CH after R/W and before cost', () => {
   assert.deepEqual(
     buildStatsParts({ input: 10000, output: 800, cacheRead: 30000, cacheWrite: 5000 }, 0.012),
     ['↑10k', '↓800', 'R30k', 'W5.0k', 'CH66.7%', '$0.012'],
+  );
+});
+
+test('master total includes subagents and excludes cacheRead', () => {
+  assert.equal(
+    getSessionMasterTotal({ input: 10000, output: 800, cacheRead: 30000, cacheWrite: 5000 }, 1200),
+    17000,
+  );
+});
+
+test('master total matches session total when no subagents ran', () => {
+  assert.equal(
+    getSessionMasterTotal({ input: 1000, output: 250, cacheRead: 4000, cacheWrite: 500 }, 0),
+    1750,
   );
 });

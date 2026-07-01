@@ -19,6 +19,10 @@ import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import { hasNerdFonts, hexFg, readStaleSafe, withIcon } from './utils.ts';
 import { readPowerlineSettings } from './settings.ts';
 
+const SUBAGENT_MANAGER_KEY = Symbol.for('pi-subagents:manager');
+const SUBAGENT_USAGE_ENTRY_TYPE = 'powerline:subagent-usage';
+const SUBAGENT_POLL_MS = 500;
+
 // ═══════════════════════════════════════════════════════════════════════════
 // auto-compact detection (nested under compaction.enabled, not powerline)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -124,6 +128,38 @@ interface FooterSnapshot {
   usingSubscription: boolean;
 }
 
+interface SubagentUsageEntry {
+  agentId: string;
+  total: number;
+  input?: number;
+  output?: number;
+  cacheWrite?: number;
+  status?: string;
+}
+
+interface SubagentLifecycleEvent {
+  id: string;
+  status?: string;
+  tokens?: {
+    input?: number;
+    output?: number;
+    total?: number;
+  };
+}
+
+interface SubagentManagerLike {
+  getRecord(id: string):
+    | {
+        status?: string;
+        lifetimeUsage?: {
+          input?: number;
+          output?: number;
+          cacheWrite?: number;
+        };
+      }
+    | undefined;
+}
+
 const EMPTY_FOOTER_SNAPSHOT: FooterSnapshot = {
   totalInput: 0,
   totalOutput: 0,
@@ -143,6 +179,130 @@ let isStreaming = false;
 let liveAssistantUsage: SessionAssistantUsage | null = null;
 let autoCompactEnabled = true;
 let footerSnapshot: FooterSnapshot = { ...EMPTY_FOOTER_SNAPSHOT };
+let subagentUsageById = new Map<string, SubagentUsageEntry>();
+let runningSubagentIds = new Set<string>();
+let subagentPollTimer: ReturnType<typeof setInterval> | null = null;
+
+function getSubagentManager(): SubagentManagerLike | undefined {
+  return (globalThis as Record<PropertyKey, unknown>)[SUBAGENT_MANAGER_KEY] as
+    SubagentManagerLike | undefined;
+}
+
+function getSubagentLifetimeTotal(
+  value:
+    | {
+        input?: number;
+        output?: number;
+        cacheWrite?: number;
+      }
+    | null
+    | undefined,
+): number {
+  if (!value) return 0;
+  return (value.input ?? 0) + (value.output ?? 0) + (value.cacheWrite ?? 0);
+}
+
+function getPersistedSubagentTotal(): number {
+  let total = 0;
+  for (const entry of subagentUsageById.values()) total += entry.total;
+  return total;
+}
+
+function getRunningSubagentTotal(): number {
+  const manager = getSubagentManager();
+  if (!manager) return 0;
+
+  let total = 0;
+  const staleIds: string[] = [];
+  for (const agentId of runningSubagentIds) {
+    const record = manager.getRecord(agentId);
+    if (!record) {
+      staleIds.push(agentId);
+      continue;
+    }
+    total += getSubagentLifetimeTotal(record.lifetimeUsage);
+    if (
+      record.status &&
+      ['completed', 'steered', 'aborted', 'stopped', 'error'].includes(record.status)
+    ) {
+      staleIds.push(agentId);
+    }
+  }
+
+  for (const agentId of staleIds) runningSubagentIds.delete(agentId);
+  return total;
+}
+
+function getSessionMasterTotal(
+  mainInput: number,
+  mainOutput: number,
+  mainCacheWrite: number,
+): number {
+  return (
+    mainInput +
+    mainOutput +
+    mainCacheWrite +
+    getPersistedSubagentTotal() +
+    getRunningSubagentTotal()
+  );
+}
+
+function refreshPersistedSubagentUsage(ctx: ExtensionContext): void {
+  const nextUsage = new Map<string, SubagentUsageEntry>();
+  const entries = readStaleSafe(() => ctx.sessionManager.getEntries(), [] as Array<any>);
+
+  for (const entry of entries) {
+    if (entry?.type !== 'custom' || entry.customType !== SUBAGENT_USAGE_ENTRY_TYPE) continue;
+    const data = entry.data as SubagentUsageEntry | undefined;
+    if (!data?.agentId || typeof data.total !== 'number' || data.total <= 0) continue;
+    nextUsage.set(data.agentId, data);
+  }
+
+  subagentUsageById = nextUsage;
+}
+
+function stopSubagentPolling(): void {
+  if (subagentPollTimer) {
+    clearInterval(subagentPollTimer);
+    subagentPollTimer = null;
+  }
+}
+
+function ensureSubagentPolling(enabled: boolean): void {
+  if (!enabled || runningSubagentIds.size === 0) {
+    stopSubagentPolling();
+    return;
+  }
+
+  if (subagentPollTimer) return;
+  subagentPollTimer = setInterval(() => {
+    if (runningSubagentIds.size === 0) {
+      stopSubagentPolling();
+      return;
+    }
+    liveTui?.requestRender();
+  }, SUBAGENT_POLL_MS);
+}
+
+function persistSubagentUsage(pi: ExtensionAPI, event: SubagentLifecycleEvent): void {
+  const total = event.tokens?.total ?? 0;
+  if (!event.id || total <= 0) return;
+
+  const input = event.tokens?.input ?? 0;
+  const output = event.tokens?.output ?? 0;
+  const cacheWrite = Math.max(0, total - input - output);
+  const data: SubagentUsageEntry = {
+    agentId: event.id,
+    total,
+    input,
+    output,
+    cacheWrite,
+    status: event.status,
+  };
+
+  subagentUsageById.set(event.id, data);
+  pi.appendEntry(SUBAGENT_USAGE_ENTRY_TYPE, data);
+}
 
 function resetFooterSnapshot(): void {
   footerSnapshot = { ...EMPTY_FOOTER_SNAPSHOT };
@@ -279,6 +439,11 @@ function createFooterRenderer() {
           statsParts.push(costStr);
         }
 
+        const masterTotal = getSessionMasterTotal(totalInput, totalOutput, totalCacheWrite);
+        if (masterTotal > totalInput + totalOutput + totalCacheWrite) {
+          statsParts.push(`Σ${formatTokens(masterTotal)}`);
+        }
+
         let statsLeft = statsParts.join(' ');
         let statsLeftWidth = visibleWidth(statsLeft);
         if (statsLeftWidth > width) {
@@ -349,13 +514,16 @@ export function registerFooter(pi: ExtensionAPI) {
   function enable(ctx: ExtensionContext) {
     enabled = true;
     liveThinkLevel = pi.getThinkingLevel();
+    refreshPersistedSubagentUsage(ctx);
     refreshFooterSnapshot(ctx);
+    ensureSubagentPolling(enabled);
     ctx.ui.setFooter(createFooterRenderer());
   }
 
   function disable(ctx: ExtensionContext) {
     enabled = false;
     liveTui = null;
+    stopSubagentPolling();
     resetFooterSnapshot();
     ctx.ui.setFooter(undefined);
   }
@@ -363,6 +531,8 @@ export function registerFooter(pi: ExtensionAPI) {
   // enable on session start if powerline master switch + footer setting are both on
   pi.on('session_start', (_event, ctx) => {
     autoCompactEnabled = readAutoCompactEnabled(ctx.cwd);
+    runningSubagentIds = new Set<string>();
+    refreshPersistedSubagentUsage(ctx);
     refreshFooterSnapshot(ctx);
     const s = readPowerlineSettings(ctx.cwd);
     if (s.powerline && s.footer) {
@@ -379,6 +549,7 @@ export function registerFooter(pi: ExtensionAPI) {
 
   // model switch may affect reasoning support / provider count
   pi.on('model_select', (_event, ctx) => {
+    refreshPersistedSubagentUsage(ctx);
     refreshFooterSnapshot(ctx);
     const s = readPowerlineSettings(ctx.cwd);
     const show = s.powerline && s.footer;
@@ -388,6 +559,7 @@ export function registerFooter(pi: ExtensionAPI) {
       disable(ctx);
     } else if (enabled) {
       liveThinkLevel = pi.getThinkingLevel();
+      ensureSubagentPolling(enabled);
       liveTui?.requestRender();
     }
   });
@@ -395,6 +567,7 @@ export function registerFooter(pi: ExtensionAPI) {
   // re-evaluate on /powerline command (settings changed)
   pi.events.on('powerline_settings_changed', (ctx) => {
     const c = ctx as ExtensionContext;
+    refreshPersistedSubagentUsage(c);
     refreshFooterSnapshot(c);
     const s = readPowerlineSettings(c.cwd);
     const show = s.powerline && s.footer;
@@ -403,6 +576,7 @@ export function registerFooter(pi: ExtensionAPI) {
     } else if (!show && enabled) {
       disable(c);
     } else if (enabled) {
+      ensureSubagentPolling(enabled);
       liveTui?.requestRender();
     }
   });
@@ -436,14 +610,38 @@ export function registerFooter(pi: ExtensionAPI) {
 
   pi.on('turn_end', (_event, ctx) => {
     if (!enabled) return;
+    refreshPersistedSubagentUsage(ctx);
     refreshFooterSnapshot(ctx);
+    ensureSubagentPolling(enabled);
     liveTui?.requestRender();
   });
+
+  pi.events.on('subagents:started', (event) => {
+    const data = event as { id?: string };
+    if (!data.id) return;
+    runningSubagentIds.add(data.id);
+    ensureSubagentPolling(enabled);
+    liveTui?.requestRender();
+  });
+
+  const handleSubagentFinished = (event: unknown) => {
+    const data = event as SubagentLifecycleEvent;
+    if (!data?.id) return;
+    runningSubagentIds.delete(data.id);
+    persistSubagentUsage(pi, data);
+    ensureSubagentPolling(enabled);
+    liveTui?.requestRender();
+  };
+
+  pi.events.on('subagents:completed', handleSubagentFinished);
+  pi.events.on('subagents:failed', handleSubagentFinished);
 
   pi.on('session_shutdown', (_event, ctx) => {
     if (enabled) disable(ctx);
     isStreaming = false;
     liveAssistantUsage = null;
     liveThinkLevel = 'off';
+    runningSubagentIds = new Set<string>();
+    subagentUsageById = new Map<string, SubagentUsageEntry>();
   });
 }

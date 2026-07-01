@@ -1,3 +1,9 @@
+## [0.8.3](https://github.com/false00/pi-powerline/compare/v0.8.2...v0.8.3) (2026-07-01)
+
+### Features
+
+* **footer:** add session master token total that includes pi-subagents usage
+
 ## [0.8.2](https://github.com/false00/pi-powerline/compare/v0.8.1...v0.8.2) (2026-06-30)
 
 ### Bug Fixes
