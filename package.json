@@ -1,6 +1,6 @@
 {
   "name": "@false00/pi-powerline",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "Maintained fork of pi-powerline with stale-session-safe UI rendering for pi coding agent",
   "homepage": "https://github.com/false00/pi-powerline#readme",
   "repository": {
