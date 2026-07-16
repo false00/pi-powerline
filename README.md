@@ -119,12 +119,15 @@ It also requires Pi's `quietStartup` setting to be `true`:
 ## Development and verification
 
 ```bash
-npm install
+npm install --ignore-scripts
 npm test
 npm run typecheck
 npm run lint
 npm pack --dry-run
 ```
+
+This repository intentionally avoids install-time lifecycle hooks. Dependency installs should use `--ignore-scripts`.
+The committed `.npmrc` also sets `ignore-scripts=true`, so cloned checkouts stay in no-script mode by default.
 
 This repository includes:
 
@@ -142,13 +145,7 @@ Recommended manual publish flow:
 npm run lint && npm pack --dry-run && npm publish --access public
 ```
 
-If you intentionally use:
-
-```bash
-npm publish --access public --ignore-scripts
-```
-
-that is valid for this package, but it bypasses `prepublishOnly`, so only do it after running the validation steps yourself.
+Because this repository commits `.npmrc` with `ignore-scripts=true`, `npm publish` already runs in no-script mode here. Run the validation steps above manually before publishing.
 
 ## License
 

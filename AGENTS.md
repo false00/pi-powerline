@@ -38,9 +38,9 @@ This is a pi plugin project that provides powerline-style UI extensions: editor,
 
 - Runtime originally used **bun** (`bun test`, `bun prettier`)
 - `.pi/extensions/auto-format.ts` — automatically runs prettier after `edit`/`write` tool operations on ts files
-- `simple-git-hooks` — runs prettier check + tests + commitlint before git commits
 - Tests were originally run with `bun test` (compatible with `node:test` syntax)
 - Formatting conventions: single quotes, semicolons, trailing commas, 2-space indentation, LF line endings, 100-character width
+- Installs must not run lifecycle hooks; use `npm install --ignore-scripts` / `npm ci --ignore-scripts`
 
 ## Collaboration rules
 
@@ -51,9 +51,9 @@ This is a pi plugin project that provides powerline-style UI extensions: editor,
 - Code comments must be in English
 - Keep comments concise
 - After editing `.ts` / `.json` files, run three checks:
-  1. `bun prettier --write <files>` — formatting
-  2. `bun tsc --noEmit --ignoreDeprecations 6.0` — type check
-  3. `bun test` — unit tests
+  1. `npx prettier --write <files>` — formatting
+  2. `npx tsc -p tsconfig.check.json --noEmit --ignoreDeprecations 6.0` — type check
+  3. `node --test tests/*.test.ts` — unit tests
 
 ### Creating
 

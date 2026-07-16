@@ -35,8 +35,10 @@ Requirements:
 Install dependencies:
 
 ```bash
-npm install
+npm install --ignore-scripts
 ```
+
+This repository does not rely on install-time lifecycle hooks. The committed `.npmrc` keeps installs in `ignore-scripts` mode by default.
 
 Run the standard checks:
 
@@ -85,4 +87,4 @@ npm pack --dry-run
 npm publish --access public
 ```
 
-If you intentionally use `npm publish --ignore-scripts`, make sure you have already run the validation steps above, because that bypasses `prepublishOnly`.
+Because this repository commits `.npmrc` with `ignore-scripts=true`, publishing stays in no-script mode by default. Run the validation steps above manually before publishing.

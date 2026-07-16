@@ -1,3 +1,21 @@
+## [0.8.7](https://github.com/false00/pi-powerline/compare/v0.8.6...v0.8.7) (2026-07-16)
+
+### Features
+
+* **footer:** support Pi `max` thinking level display
+
+### Miscellaneous Tasks
+
+* harden repository installs with a tracked `.npmrc` `ignore-scripts=true` policy and remove install-time hook bootstrap
+* add Dependabot updates and refresh CI, CodeQL, and dependency-review workflows
+* update Pi/tooling development dependencies and contributor security guidance
+
+## [0.8.6](https://github.com/false00/pi-powerline/compare/v0.8.5...v0.8.6) (2026-07-01)
+
+### Features
+
+* **footer:** show subagent input/output token totals, subagent cost totals, and combined session cost
+
 ## [0.8.5](https://github.com/false00/pi-powerline/compare/v0.8.4...v0.8.5) (2026-07-01)
 
 ### Bug Fixes
