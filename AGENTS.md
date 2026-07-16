@@ -42,6 +42,8 @@ This is a pi plugin project that provides powerline-style UI extensions: editor,
 - Formatting conventions: single quotes, semicolons, trailing commas, 2-space indentation, LF line endings, 100-character width
 - Current validation/runtime baseline is Node.js 22.19+
 - Installs must not run lifecycle hooks; use `npm install --ignore-scripts` / `npm ci --ignore-scripts`
+- The committed `.npmrc` keeps `ignore-scripts=true` enabled by default for this repo
+- Workflow `uses:` references in `.github/workflows/` are pinned to immutable commit SHAs; keep them pinned and update the trailing version comment when bumping actions
 
 ## Collaboration rules
 
@@ -55,6 +57,14 @@ This is a pi plugin project that provides powerline-style UI extensions: editor,
   1. `npx prettier --write <files>` — formatting
   2. `npx tsc -p tsconfig.check.json --noEmit --ignoreDeprecations 6.0` — type check
   3. `node --test tests/*.test.ts` — unit tests
+
+### GitHub flow
+
+- `main` is protected; do not expect direct pushes to succeed
+- Land changes through a branch + pull request workflow
+- Required merge checks on `main` are `test (22)`, `test (24)`, and `Analyze JavaScript (javascript)`
+- `dependency-review` runs on pull requests as extra supply-chain coverage even though it is not a required `main` check
+- The repository currently allows squash merges, not rebase merges; expect merged commit SHAs to differ from local branch commits
 
 ### Creating
 
