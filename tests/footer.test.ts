@@ -59,6 +59,29 @@ function buildSubagentStatsParts(totals: {
   return parts;
 }
 
+function formatThinkingLevel(level: string): { label: string; color: string } {
+  const labels: Record<string, string> = {
+    minimal: 'min',
+    low: 'low',
+    medium: 'med',
+    high: 'high',
+    xhigh: 'xhi',
+    max: 'max',
+  };
+  const colors: Record<string, string> = {
+    high: 'thinkingHigh',
+    xhigh: 'thinkingXhigh',
+    max: 'thinkingXhigh',
+    minimal: 'thinkingMinimal',
+    low: 'thinkingLow',
+    medium: 'thinkingMedium',
+  };
+  return {
+    label: labels[level] ?? level,
+    color: colors[level] ?? 'thinkingOff',
+  };
+}
+
 // ── formatTokens ──
 
 test('formatTokens: < 1000 returns exact number', () => {
@@ -163,4 +186,11 @@ test('subscription cost stats are clearly labeled as estimates', () => {
 
 test('subscription main cost still shows estimate label with zero usage cost', () => {
   assert.deepEqual(buildCostStatsParts(0, 0, true), ['$0.000 est']);
+});
+
+test('thinking level formatting supports max with xhigh color fallback', () => {
+  assert.deepEqual(formatThinkingLevel('max'), {
+    label: 'max',
+    color: 'thinkingXhigh',
+  });
 });

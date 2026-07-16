@@ -79,11 +79,13 @@ const THINK_LABELS: Record<string, string> = {
   medium: 'med',
   high: 'high',
   xhigh: 'xhi',
+  max: 'max',
 };
 
 const THINK_COLORS: Record<string, string> = {
   high: 'thinkingHigh',
   xhigh: 'thinkingXhigh',
+  max: 'thinkingXhigh',
   minimal: 'thinkingMinimal',
   low: 'thinkingLow',
   medium: 'thinkingMedium',
