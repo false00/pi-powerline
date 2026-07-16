@@ -128,6 +128,7 @@ npm pack --dry-run
 
 This repository intentionally avoids install-time lifecycle hooks. Dependency installs should use `--ignore-scripts`.
 The committed `.npmrc` also sets `ignore-scripts=true`, so cloned checkouts stay in no-script mode by default.
+Current development and validation targets assume Node.js 22.19+.
 
 This repository includes:
 

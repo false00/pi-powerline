@@ -8,6 +8,7 @@
 
 * harden repository installs with a tracked `.npmrc` `ignore-scripts=true` policy and remove install-time hook bootstrap
 * add Dependabot updates and refresh CI, CodeQL, and dependency-review workflows
+* align the development and CI baseline with Node.js 22.19+ and current Pi package requirements
 * update Pi/tooling development dependencies and contributor security guidance
 
 ## [0.8.6](https://github.com/false00/pi-powerline/compare/v0.8.5...v0.8.6) (2026-07-01)

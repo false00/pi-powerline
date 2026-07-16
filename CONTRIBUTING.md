@@ -29,7 +29,7 @@ CHANGELOG.md    Release history
 
 Requirements:
 
-- Node.js 20+
+- Node.js 22.19+
 - npm
 
 Install dependencies:

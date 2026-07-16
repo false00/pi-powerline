@@ -40,6 +40,7 @@ This is a pi plugin project that provides powerline-style UI extensions: editor,
 - `.pi/extensions/auto-format.ts` — automatically runs prettier after `edit`/`write` tool operations on ts files
 - Tests were originally run with `bun test` (compatible with `node:test` syntax)
 - Formatting conventions: single quotes, semicolons, trailing commas, 2-space indentation, LF line endings, 100-character width
+- Current validation/runtime baseline is Node.js 22.19+
 - Installs must not run lifecycle hooks; use `npm install --ignore-scripts` / `npm ci --ignore-scripts`
 
 ## Collaboration rules
