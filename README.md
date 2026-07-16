@@ -27,6 +27,189 @@ This fork currently includes the following explicit additions:
 4. **Development checks use standard Node/npm commands**
    - Uses `npm test`, `npm run typecheck`, and `npm run lint`, so local validation no longer depends on bun.
 
+## What this package changes in Pi
+
+This package is a **Pi UI package**, not a model/provider package.
+It changes how parts of Pi's terminal UI are rendered and how a few related settings are toggled, but it does **not** change the underlying model response text, tool execution semantics, or provider transport.
+
+At a high level, it does all of the following:
+
+1. **Registers powerline-specific Pi flags**
+  - `powerline`
+  - `breadcrumb`
+  - `footer`
+  - `header`
+  - `header-info`
+  - Those flags are exposed through Pi's extension API and are also backed by settings files.
+2. **Registers a unified `/powerline` slash command**
+  - With no arguments, `/powerline` toggles the master on/off switch.
+  - `/powerline info` shows the currently merged settings.
+  - `/powerline breadcrumb:hide|top|inner` changes breadcrumb placement.
+  - `/powerline footer:on|off`, `/powerline header:on|off`, and `/powerline header-info:on|off` toggle the individual UI pieces.
+  - Command changes are persisted into the project-level `.pi/settings.json` while preserving unrelated keys.
+3. **Replaces Pi's editor component when powerline is enabled**
+  - The default editor chrome is swapped for a bordered editor with a `❯` prefix.
+  - If the current input starts with `!`, the editor switches to Pi's `bashMode` color tokens.
+  - The editor render is width-capped to the live terminal column count so it does not overrun narrow terminals after resizes.
+  - If `breadcrumb` is `inner`, the editor's top border embeds a live `model -> folder` breadcrumb.
+4. **Optionally adds a breadcrumb widget above the editor**
+  - If `breadcrumb` is `top`, the package adds a widget above the editor instead of embedding breadcrumb text into the editor border.
+  - That widget shows the current model name and the current working folder.
+5. **Replaces Pi's footer**
+  - The footer renders context-window usage, token totals, cache reads/writes, cache hit rate, cost, Git branch, current thinking level, and extension status text.
+  - It updates during live streaming, not just at turn boundaries.
+  - It mirrors Pi's compact footer style rather than introducing a separate multi-row dashboard.
+6. **Replaces Pi's startup/reload header**
+  - The header shows a centered gradient PI logo and a status line for `startup`, `reload`, `new`, `resume`, or `fork`.
+  - If `header-info` is enabled and Pi's `quietStartup` is also enabled, it can additionally render diagnostic sections for context files, packages, tools, skills, prompts, and extensions.
+7. **Aggregates subagent usage into the footer**
+  - If Pi subagents are present and emitting events, the footer can include subagent token totals and subagent cost totals.
+  - Those totals are preserved into the current session as custom entries so they survive resume/reload scenarios.
+8. **Uses stale-session-safe snapshots instead of long-lived ctx references**
+  - The package snapshots the specific state it needs and clears UI state on shutdown to avoid stale `ExtensionContext` crashes during reload/new/fork/switch-session flows.
+
+## How it interacts with Pi at runtime
+
+This package is intentionally narrow in scope, but it does touch several Pi APIs to keep the UI live and consistent.
+
+### UI surfaces it replaces or augments
+
+- **Editor**: replaced through `ctx.ui.setEditorComponent(...)` when powerline is enabled.
+- **Header**: replaced through `ctx.ui.setHeader(...)` when the custom header is enabled.
+- **Footer**: replaced through `ctx.ui.setFooter(...)` when the custom footer is enabled.
+- **Widget**: added through `ctx.ui.setWidget(...)` when breadcrumb mode is `top`.
+- **Notifications**: `/powerline` uses `ctx.ui.notify(...)` to show status, usage help, and toggle confirmations.
+
+### Pi events it listens to
+
+The package reacts to Pi runtime events rather than polling blindly.
+
+- `session_start`: enable the editor/header/footer/widget for the new session when settings allow it.
+- `model_select`: refresh breadcrumb/header/footer state when model capabilities or displayed model names change.
+- `before_agent_start`: refresh header diagnostic information using Pi's exact system-prompt inputs.
+- `thinking_level_select`: keep the footer's thinking-level display in sync.
+- `agent_start`, `message_update`, `message_end`, `turn_end`: keep footer token/cost displays live while the agent is streaming and after a turn persists.
+- `session_shutdown`: tear down custom UI state so stale contexts are not reused.
+- custom `powerline_settings_changed`: re-render immediately after `/powerline` writes settings.
+- custom `subagents:started`, `subagents:completed`, `subagents:failed`: update subagent totals in the footer and persist finished subagent usage.
+
+### Pi state it reads
+
+At runtime, the package reads several pieces of Pi state to render the UI accurately:
+
+- current `cwd`
+- current model name/id, reasoning support, and context window
+- current thinking level
+- session entries and persisted assistant usage
+- live streaming assistant usage during the current turn
+- current context-window usage via `ctx.getContextUsage()`
+- Git branch and extension status text from Pi footer data
+- active tools, commands, prompts, and skills when rendering header diagnostics
+- configured Pi package and extension paths when rendering header diagnostics
+- `quietStartup`, `compaction.enabled`, and the powerline-specific settings in Pi settings files
+
+### Files and settings it reads
+
+The package reads, but usually does not write, the following project/user data:
+
+- `~/.pi/agent/settings.json`
+- `.pi/settings.json`
+- `.pi/APPEND_SYSTEM.md`
+- nearby `AGENTS.md` / `CLAUDE.md` files discovered up the directory tree for header diagnostics
+- configured Pi package and extension directories when building the header diagnostics view
+
+### What it writes
+
+The package writes in only two cases:
+
+1. **Project powerline settings**
+  - `/powerline` updates `.pi/settings.json` in the current project.
+  - Unrelated keys are preserved; it does not replace the whole file with powerline-only content.
+2. **Custom session entries for subagent usage**
+  - The footer persists subagent usage as custom session entries of type `powerline:subagent-usage`.
+  - That lets subagent totals survive later `/resume` flows.
+
+## What it changes in output, and what it does not
+
+This is the important boundary if you want to know whether the package is "messing with output."
+
+### It does change
+
+- the **startup/reload header output**
+- the **input editor chrome**
+- the **breadcrumb display** above or inside the editor
+- the **footer display** for usage/cost/context/thinking/Git information
+- the **diagnostic output** shown by the header when `header-info` is enabled
+- the **UI notification text** produced by `/powerline`
+
+### It does not change
+
+- assistant message content
+- user message content
+- tool stdout/stderr
+- transcript message ordering
+- provider/model request payloads
+- model selection logic itself
+- system prompt content by default
+- file edits or tool calls made by Pi
+
+In other words: it changes **presentation and some lightweight settings/session metadata**, not the semantic content of model replies or tool outputs.
+
+## Feature details
+
+### Editor behavior
+
+- Adds top and bottom borders.
+- Adds `❯` on the first input line and indentation on following lines.
+- Preserves ANSI sequences already present in the underlying editor output.
+- Uses Pi theme tokens for border/prefix coloring.
+- Switches to bash-mode colors when the prompt starts with `!`.
+- Can embed the `model -> folder` breadcrumb into the top border when `breadcrumb` is `inner`.
+
+### Breadcrumb behavior
+
+- Renders the active model name and current folder.
+- Uses Nerd Font icons when available, with plain-text fallback otherwise.
+- Can be hidden entirely, shown above the editor, or embedded inside the editor border.
+
+### Footer behavior
+
+- Shows current context usage as `used%/window`.
+- Shows `(auto)` when Pi compaction is enabled.
+- Shows cumulative input/output/cache token usage.
+- Shows cache hit rate using prompt-side cache reads.
+- Shows model/session cost when available.
+- Marks OAuth/subscription-backed cost as `est` to make it clear the value is estimated.
+- Shows current Git branch.
+- Shows the current thinking level, including Pi's newer `max` level.
+- Shows extension status strings that Pi exposes to the footer.
+- Tracks subagent token totals and cost totals when subagent events are present.
+
+### Header behavior
+
+- Shows a centered gradient PI logo.
+- Shows a status label such as `Welcome`, `Reloaded`, `New Session Started`, `Session Resumed`, or `Session Forked`.
+- Can optionally show diagnostic sections for:
+  - context files
+  - configured packages
+  - active tools
+  - loaded skills
+  - prompt commands
+  - extension paths
+- Only shows that diagnostics block for `startup` and `reload`, not for `new`, `resume`, or `fork`.
+- Normalizes displayed paths to `/` so Windows and Unix output are more consistent.
+
+## Repository-only extras
+
+The published package is the UI extension package above. The repository also carries a few maintainer-only pieces that are useful to know about:
+
+- a committed `.npmrc` that keeps `ignore-scripts=true`
+- pinned GitHub Actions workflow dependencies
+- Dependabot configuration for npm and GitHub Actions
+- CI, CodeQL, and dependency-review workflows
+- a protected `main` branch workflow that expects PRs rather than direct pushes
+- local `.pi/` development helpers in the repo that are not part of the published package payload
+
 ## Install
 
 ### Install from npm
@@ -109,12 +292,12 @@ It also requires Pi's `quietStartup` setting to be `true`:
 
 | Command | Description |
 |---|---|
-| `/powerline` | Toggle the master switch |
-| `/powerline info` | Show current settings |
-| `/powerline breadcrumb:top\|inner\|hide` | Set breadcrumb mode |
-| `/powerline footer:on\|off` | Toggle footer |
-| `/powerline header:on\|off` | Toggle header |
-| `/powerline header-info:on\|off` | Toggle header diagnostics |
+| `/powerline` | Toggle the master powerline switch and persist the project setting |
+| `/powerline info` | Show the merged current powerline settings |
+| `/powerline breadcrumb:top\|inner\|hide` | Change where the model/folder breadcrumb is rendered |
+| `/powerline footer:on\|off` | Enable or disable the custom footer |
+| `/powerline header:on\|off` | Enable or disable the custom header |
+| `/powerline header-info:on\|off` | Enable or disable header diagnostics for startup/reload |
 
 ## Development and verification
 
@@ -137,6 +320,8 @@ This repository includes:
 - `CHANGELOG.md`: explicit fork version history
 - `CONTRIBUTING.md`: contributor workflow and release checklist
 - `SECURITY.md`: vulnerability reporting and hardening guidance
+- `.github/workflows/*`: pinned GitHub Actions CI / CodeQL / dependency-review automation
+- `.github/dependabot.yml`: automated dependency update configuration
 
 ## Manual publish note
 
